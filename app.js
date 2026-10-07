@@ -124,8 +124,12 @@ function save(tab, recs, quiet) {
   store(K.queue, queue); flush();
 }
 async function api(acao, extra = {}) {
-  const r = await fetch(API + '/gato-veio', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ senha: load(K.senha, ''), acao, ...extra }) });
+  // text/plain evita a "consulta prévia" (CORS) do navegador; o n8n lê o texto como JSON.
+  let r;
+  try {
+    r = await fetch(API + '/gato-veio', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ senha: load(K.senha, ''), acao, ...extra }) });
+  } catch (e) { const err = new Error('sem resposta do n8n'); err.net = true; throw err; }
   if (r.status === 401) { const e = new Error('Senha incorreta'); e.auth = true; throw e; }
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const txt = await r.text(); try { return JSON.parse(txt); } catch { return {}; }
@@ -869,8 +873,20 @@ async function start() {
   try { DB = await fetchDB(); }
   catch (e) {
     if (e.auth) return showLogin(load(K.senha, '') ? 'Senha incorreta.' : '');
-    $('#main').innerHTML = `<div class="notice bad"><b>Não consegui carregar os dados.</b><br>${MODE === 'n8n' ? 'Confira se o workflow do n8n está ativo e se o endereço no config.js está certo.' : 'Abra o painel por um servidor (GitHub Pages ou servidor local), não direto do arquivo.'}<br><span class="mini">${esc(e.message)}</span></div>`;
-    setSync(); return;
+    const teste = API + '/gato-veio';
+    $('#sync').className = 'sync err'; $('#sync').textContent = 'sem conexão';
+    $('#main').innerHTML = MODE === 'n8n' ? `<div class="card accent"><h3>Não consegui falar com o n8n</h3>
+      <p class="mini">Erro: ${esc(e.message)} · endereço usado: <b>${esc(teste)}</b></p>
+      <ol style="padding-left:18px;line-height:1.7">
+        <li>Abra <a href="${esc(teste)}" target="_blank" rel="noopener">este link</a> numa aba nova.
+          <br>• “not registered for GET” → o endereço está certo; o problema é no workflow (passo 3).
+          <br>• “not registered” / página de erro → workflow <b>inativo</b> ou endereço errado no <b>config.js</b>.</li>
+        <li>O endereço no config.js precisa começar com <b>https://</b>, terminar em <b>/webhook</b> (sem /gato-veio no final) e não pode ser o <i>webhook-test</i>.</li>
+        <li>No n8n, abra <b>Executions</b> do workflow: se aparece uma execução vermelha, clique nela e veja qual nó falhou (geralmente credencial do Google ou ID da planilha).</li>
+      </ol>
+      <div class="toolbar"><button class="btn" onclick="location.reload()">Tentar de novo</button><button class="btn ghost" onclick="localStorage.removeItem('${K.senha}');location.reload()">Trocar senha</button></div></div>`
+      : `<div class="notice bad"><b>Não consegui carregar os dados.</b><br>Abra o painel por um servidor (GitHub Pages ou servidor local), não direto do arquivo.<br><span class="mini">${esc(e.message)}</span></div>`;
+    if (MODE !== "n8n") setSync(); return;
   }
   $('#tabs').style.display = '';
   evId = pickEvent(); render(); if (queue.length) flush();
