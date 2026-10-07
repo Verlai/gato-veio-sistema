@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#431b17">
+  <meta name="robots" content="noindex">
+  <title>Gato Véio · Painel</title>
+  <link rel="icon" href="logo.webp" type="image/webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <img class="brand" src="logo.webp" alt="Gato Véio — vinho, brasa e prosa">
+      <div class="hero-copy">
+        <div class="hero-top"><span class="eyebrow">VINHO · BRASA · PROSA</span><button id="sync" class="sync" type="button"></button></div>
+        <h1 id="ev-name">Gato Véio</h1>
+        <p id="ev-when" class="when"></p>
+        <div class="stats" id="stats"></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Seções">
+    <button data-page="hoje">Hoje</button>
+    <button data-page="tarefas">Tarefas</button>
+    <button data-page="reservas">Reservas</button>
+    <button data-page="cardapio">Cardápio</button>
+    <button data-page="receitas">Receitas</button>
+    <button data-page="compras">Compras</button>
+    <button data-page="bebidas">Bebidas</button>
+    <button data-page="evento">Evento</button>
+    <button data-page="cadastros">Cadastros</button>
+  </nav>
+
+  <main id="main"><p class="loading">Carregando…</p></main>
+
+  <dialog id="dlg"><form method="dialog" id="dlg-form"></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <footer>GATO VÉIO <span>·</span> VINHO, BRASA E PROSA</footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
