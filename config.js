@@ -3,5 +3,5 @@
 // Exemplo: 'https://n8n.seudominio.com.br/webhook'
 // Vazio = modo de teste: dados de exemplo, salvos só neste navegador.
 window.GATO_CONFIG = {
-  n8n: ''
+  n8n: 'https://joaovictor-n8n.kjb64n.easypanel.host/webhook/gato-veio'
 };
