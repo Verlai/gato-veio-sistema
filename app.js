@@ -364,11 +364,23 @@ function render() {
   ({ hoje, tarefas, reservas: telaReservas, cardapio, receitas: telaReceitas, compras, bebidas, evento: telaEvento, cadastros })[page]();
 }
 
+function periodo() {
+  const t0 = today(), e = ev(), p = prefs.periodo || 'hoje';
+  const domingo = addDays(t0, (7 - dowOf(t0)) % 7);
+  const presets = {
+    hoje: [t0, t0], amanha: [addDays(t0, 1), addDays(t0, 1)], semana: [t0, domingo],
+    '7dias': [t0, addDays(t0, 6)], evento: [t0, e.data && e.data >= t0 ? e.data : addDays(t0, 6)],
+  };
+  if (presets[p]) return { p, de: presets[p][0], ate: presets[p][1] };
+  let de = normDate(prefs.de) || t0, ate = normDate(prefs.ate) || de; if (ate < de) [de, ate] = [ate, de];
+  return { p: 'custom', de, ate };
+}
+
 function hoje() {
-  const e = ev(), t0 = today(), ts = tasks(), r = reservas();
-  const now = ts.filter(t => t.data === t0 && !isDone(t));
+  const e = ev(), t0 = today(), ts = tasks(), r = reservas(), per = periodo();
+  const noPeriodo = ts.filter(t => t.data && t.data >= per.de && t.data <= per.ate && !(prefs.ocultarFeitas && isDone(t)));
+  const pendPeriodo = noPeriodo.filter(t => !isDone(t)).length;
   const late = ts.filter(t => t.data && t.data < t0 && !isDone(t));
-  const next = ts.filter(t => !isDone(t) && t.data > t0 && t.data <= addDays(t0, 3));
   const done = ts.filter(isDone).length, pct = ts.length ? Math.round(done / ts.length * 100) : 0;
   const avisos = [];
   if (e.prazo_pagamento) {
@@ -389,7 +401,10 @@ function hoje() {
     if (pend) avisos.push([`${pend} item(ns) de compra pendente(s)`, 'compras']);
   }
   const dP = e.prazo_pagamento ? diffDays(e.prazo_pagamento, t0) : null;
-  $('#main').innerHTML = head('Hoje', `${fmtLong(t0)} · o que fazer agora e o que vem pela frente.`,
+  const dias = new Map(); noPeriodo.forEach(t => { if (!dias.has(t.data)) dias.set(t.data, []); dias.get(t.data).push(t); });
+  const titulo = per.de === per.ate ? (per.de === t0 ? 'Hoje' : per.de === addDays(t0, 1) ? 'Amanhã' : fmtLong(per.de)) : `${fmtLong(per.de)} a ${fmtLong(per.ate)}`;
+  const chip = (k, l) => `<button class="${per.p === k ? 'active' : ''}" data-periodo="${k}">${l}</button>`;
+  $('#main').innerHTML = head('Início', `${fmtLong(t0)} · escolha o período para ver as tarefas.`,
       MODE === 'n8n' ? '<button class="btn light small" data-act="resumo">Mandar o resumo por e-mail agora</button>' : '') + `
     <div class="grid four">
       <div class="card kpi accent"><div class="lbl">TAREFAS</div><div class="num">${pct}%</div><div class="bar"><i style="width:${pct}%"></i></div><div class="mini">${done} de ${ts.length} feitas</div></div>
@@ -397,10 +412,18 @@ function hoje() {
       <div class="card kpi"><div class="lbl">PAGOS</div><div class="num">${r.pagos.length}<small> / ${r.cap || '?'}</small></div><div class="mini">${r.lista.length} na lista · ${r.espera.length} na espera</div></div>
       <div class="card kpi"><div class="lbl">PRAZO DE PAGAMENTO</div><div class="num" style="font-size:1.5rem">${e.prazo_pagamento ? esc(fmtLong(e.prazo_pagamento)) : '—'}</div><div class="mini">${dP == null ? 'não definido' : dP > 0 ? `em ${dP} dia(s)` : dP === 0 ? 'é hoje' : 'encerrado'}</div></div>
     </div>
+    <div class="card accent" style="margin-top:16px">
+      <div class="toolbar" style="margin-bottom:10px">
+        <div class="subtabs" style="margin:0">${chip('hoje', 'Hoje')}${chip('amanha', 'Amanhã')}${chip('semana', 'Esta semana')}${chip('7dias', 'Próximos 7 dias')}${e.data && e.data >= t0 ? chip('evento', 'Até o evento') : ''}</div>
+        <label class="f">De<input type="date" id="per-de" value="${per.de}"></label>
+        <label class="f">Até<input type="date" id="per-ate" value="${per.ate}"></label>
+        <label class="chk"><input type="checkbox" id="ocultar" ${prefs.ocultarFeitas ? 'checked' : ''}> ocultar feitas</label>
+      </div>
+      <h3>${esc(titulo)} <span class="mini">· ${pendPeriodo} pendente(s)${noPeriodo.length - pendPeriodo ? `, ${noPeriodo.length - pendPeriodo} feita(s)` : ''}</span></h3>
+      ${[...dias].map(([d, l]) => `${per.de !== per.ate ? `<div class="group-h">${esc(fmtLong(d))}${d === t0 ? ' <span class="pill dark">hoje</span>' : ''}</div>` : ''}${l.map(t => taskHTML(t)).join('')}`).join('') || '<p class="empty">Nenhuma tarefa nesse período.</p>'}
+    </div>
     <div class="grid" style="margin-top:16px">
-      <div class="card accent"><h3>Para hoje (${now.length})</h3>${now.map(t => taskHTML(t)).join('') || '<p class="empty">Nada com prazo para hoje.</p>'}</div>
       <div class="card"><h3>Atrasadas (${late.length})</h3>${late.map(t => taskHTML(t, { date: 1 })).join('') || '<p class="empty">Tudo em dia.</p>'}</div>
-      <div class="card"><h3>Próximos 3 dias</h3>${next.map(t => taskHTML(t, { date: 1 })).join('') || '<p class="empty">Nada nos próximos 3 dias.</p>'}</div>
       <div class="card"><h3>Avisos</h3>${avisos.length ? `<ul class="alerts">${avisos.map(([m, p, bad]) => `<li class="${bad ? 'bad' : ''}">${esc(m)} <button class="linkbtn" data-nav="${p}">abrir</button></li>`).join('')}</ul>` : '<p class="empty">Nenhum aviso.</p>'}</div>
     </div>`;
 }
@@ -817,6 +840,7 @@ document.addEventListener('click', e => {
   if ((el = d('[data-pick-rec]'))) { recSel = el.dataset.pickRec; render(); return; }
   if ((el = d('[data-open-rec]'))) { recSel = el.dataset.openRec; page = 'receitas'; render(); window.scrollTo({ top: 0 }); return; }
   if ((el = d('[data-ing-dlg]'))) return ingDialog(byId('Ingredientes', el.dataset.ingDlg));
+  if ((el = d('[data-periodo]'))) { prefs.periodo = el.dataset.periodo; savePrefs(); render(); return; }
   if ((el = d('[data-pref]'))) { prefs[el.dataset.pref] = el.dataset.val; savePrefs(); render(); return; }
   if ((el = d('[data-act]')) && ACTIONS[el.dataset.act]) return ACTIONS[el.dataset.act](el);
   if (d('#sync') && MODE === 'n8n') { queue.length ? flush() : reload(); }
@@ -831,6 +855,8 @@ document.addEventListener('change', e => {
   }
   if (x.dataset.itemIng) { const it = byId('Receita_Itens', x.dataset.itemIng), g = findOrCreateIngredient(x.value);
     if (g && it.ingrediente_id !== g.id) save('Receita_Itens', [{ ...it, ingrediente_id: g.id }]); rerender(); return; }
+  if (x.id === 'per-de' || x.id === 'per-ate') { const p = periodo(); prefs.de = x.id === 'per-de' ? x.value : p.de; prefs.ate = x.id === 'per-ate' ? x.value : p.ate;
+    if (x.id === 'per-de' && normDate(prefs.ate) < normDate(prefs.de)) prefs.ate = prefs.de; prefs.periodo = 'custom'; savePrefs(); render(); return; }
   if (x.id === 'ocultar') { prefs.ocultarFeitas = x.checked; savePrefs(); render(); return; }
   if (x.id === 'base' || x.id === 'baseN') { prefs[x.id] = x.value; savePrefs(); render(); return; }
   if (x.id === 'ev-pick') { evId = x.value; store(K.ev, evId); render(); }
