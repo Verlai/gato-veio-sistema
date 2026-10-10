@@ -594,12 +594,13 @@ function compras() {
         <label class="f">Calcular para<select id="base">${opts([['auto', 'Automático'], ['pagos', `Pagos (${reservas().pagos.length})`], ['capacidade', `Capacidade (${reservas().cap})`], ['outro', 'Outro número']], prefs.base)}</select></label>
         ${prefs.base === 'outro' ? `<label class="f">Pessoas<input id="baseN" inputmode="numeric" value="${esc(prefs.baseN)}" style="width:90px"></label>` : ''}
         <button class="btn" data-act="gerar-compras">Gerar / atualizar lista (${base.n} pessoas)</button>
+        <button class="btn light" data-copiar="">Copiar pendentes</button>
       </div>
       <p class="mini" style="margin:0">Base atual: ${base.n} pessoas (${esc(base.label)}). Atualizar a lista recalcula as quantidades e mantém o que vocês já marcaram como <i>Já tenho</i> ou <i>Comprado</i>.${skipped.length ? `<br><b>Fora da conta</b> (aprovados sem receita completa): ${esc(skipped.join(', '))}.` : ''}</p>
       <div class="totals" style="margin-top:10px"><span>Pendentes <b>${pend}</b></span><span>Itens <b>${cs.length}</b></span><span>Gasto registrado <b>${money(total)}</b></span></div>
     </div>
     <div class="card">
-      ${[...grupos].filter(([, l]) => l.length).map(([g, l]) => `<h4>${esc(g)} (${l.filter(c => c.status === 'Comprar').length} pendente${l.filter(c => c.status === 'Comprar').length === 1 ? '' : 's'})</h4>` + l.map(c => row(`
+      ${[...grupos].filter(([, l]) => l.length).map(([g, l]) => `<div class="group-h" style="justify-content:space-between"><span>${esc(g)} (${l.filter(c => c.status === 'Comprar').length} pendente${l.filter(c => c.status === 'Comprar').length === 1 ? '' : 's'})</span>${l.some(c => c.status === 'Comprar') ? `<button class="btn small light" data-copiar="${esc(g)}">Copiar ${esc(g.toLowerCase())}</button>` : ''}</div>` + l.map(c => row(`
         ${c.origem === 'Gerada' ? cell(`<span class="rowtitle">${esc(c.item)}</span><small>${esc(c.observacao)}</small>`, 4, 1) : field('Compras', c, { f: 'item', l: 'Item avulso', w: 4, wide: 1 })}
         ${field('Compras', c, { f: 'quantidade', l: 'Qtd', w: 1 })}
         ${field('Compras', c, { f: 'unidade', l: 'Unidade', w: 1 })}
@@ -771,6 +772,33 @@ function ingDialog(g) {
     d => save('Ingredientes', [{ ...g, unidade: d.get('unidade'), onde_comprar: d.get('onde').trim(), compra_fator: d.get('fator').trim(), compra_unidade: d.get('cu').trim(), arredondar: d.get('arr') ? 'sim' : 'não' }]));
 }
 
+
+/* ---------- copiar lista para o app Lembretes ---------- */
+function linhaCompra(c) {
+  if (c.unidade === 'a gosto') return `${c.item} (conferir se tem)`;
+  let u = c.unidade || '';
+  const n = num(c.quantidade);
+  if (n != null && n > 1 && /^[a-zà-ú]{3,}$/i.test(u) && !/s$/i.test(u) && /[aeiouáéíóú]$/i.test(u)) u += 's';
+  const q = [c.quantidade, u].filter(Boolean).join(' ');
+  return q ? `${c.item} – ${q}` : c.item;
+}
+async function copiarCompras(onde) {
+  const pend = of('Compras').filter(c => c.status === 'Comprar' && (!onde || (c.onde_comprar || 'Outro') === onde))
+    .sort((a, b) => (a.onde_comprar || '').localeCompare(b.onde_comprar || '') || a.item.localeCompare(b.item));
+  if (!pend.length) return toast('Nada pendente para copiar');
+  const texto = pend.map(linhaCompra).join('\n');
+  let ok = false;
+  try { await navigator.clipboard.writeText(texto); ok = true; } catch (e) {}
+  if (!ok) {
+    const ta = document.createElement('textarea'); ta.value = texto; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, texto.length);
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+  }
+  toast(ok ? `${pend.length} itens copiados. No Lembretes, toque num item novo e cole.` : 'Não consegui copiar neste navegador');
+}
+
 /* ---------- ações ---------- */
 function findOrCreateIngredient(nome, unidade) {
   const n = nome.trim(); if (!n) return null;
@@ -840,6 +868,7 @@ document.addEventListener('click', e => {
   if ((el = d('[data-pick-rec]'))) { recSel = el.dataset.pickRec; render(); return; }
   if ((el = d('[data-open-rec]'))) { recSel = el.dataset.openRec; page = 'receitas'; render(); window.scrollTo({ top: 0 }); return; }
   if ((el = d('[data-ing-dlg]'))) return ingDialog(byId('Ingredientes', el.dataset.ingDlg));
+  if ((el = d('[data-copiar]'))) { copiarCompras(el.dataset.copiar); return; }
   if ((el = d('[data-periodo]'))) { prefs.periodo = el.dataset.periodo; savePrefs(); render(); return; }
   if ((el = d('[data-pref]'))) { prefs[el.dataset.pref] = el.dataset.val; savePrefs(); render(); return; }
   if ((el = d('[data-act]')) && ACTIONS[el.dataset.act]) return ACTIONS[el.dataset.act](el);
