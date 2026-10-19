@@ -205,8 +205,13 @@ function receitaIncompleta(r) {
 }
 function bebidaCalc(b) {
   const custo = num(b.custo_garrafa), rec = num(b.recebidas), dev = num(b.devolvidas);
-  const consumidas = rec != null ? (b.modalidade === 'Comprado' ? rec : rec - (dev || 0)) : null;
-  return { custo, consumidas, pagar: custo != null && consumidas != null ? custo * consumidas : null,
+  // Consignado: só vira custo depois que a devolução for informada (mesmo que seja 0).
+  const consignado = b.modalidade !== 'Comprado';
+  const aguardando = consignado && rec != null && dev == null;
+  const consumidas = rec == null || aguardando ? null : (consignado ? rec - dev : rec);
+  return { custo, consumidas, aguardando,
+    pagar: custo != null && consumidas != null ? custo * consumidas : null,
+    pendente: aguardando && custo != null ? custo * rec : 0,
     custoTaca: custo != null ? custo / TACAS : null,
     margemGarrafa: custo != null && num(b.preco_garrafa) != null ? num(b.preco_garrafa) - custo : null,
     margemTaca: custo != null && num(b.preco_taca) != null ? num(b.preco_taca) - custo / TACAS : null };
@@ -218,7 +223,8 @@ function fechamento() {
   const compras = of('Compras').reduce((s, c) => s + (num(c.custo) || 0), 0);
   const custos = of('Custos').reduce((s, c) => s + (num(c.valor) || 0), 0);
   const vinicolas = of('Bebidas').reduce((s, b) => s + (bebidaCalc(b).pagar || 0), 0);
-  return { ingressos, bebidasVendidas, compras, custos, vinicolas, resultado: ingressos + bebidasVendidas - compras - custos - vinicolas };
+  const vinicolasPendente = of('Bebidas').reduce((s, b) => s + bebidaCalc(b).pendente, 0);
+  return { ingressos, bebidasVendidas, compras, custos, vinicolas, vinicolasPendente, resultado: ingressos + bebidasVendidas - compras - custos - vinicolas };
 }
 function pickEvent() {
   const list = events(), saved = load(K.ev, null);
@@ -621,13 +627,13 @@ function bebidas() {
   const bs = of('Bebidas'), forn = DB.Fornecedores.filter(live).map(f => [f.id, f.nome]);
   const pratos = of('Cardapio').filter(c => c.status !== 'Descartado');
   const acerto = new Map();
-  bs.forEach(b => { const c = bebidaCalc(b), k = byId('Fornecedores', b.fornecedor_id)?.nome || 'Sem fornecedor', a = acerto.get(k) || { consumidas: 0, pagar: 0, devolver: 0 };
-    a.consumidas += c.consumidas || 0; a.pagar += c.pagar || 0; if (b.modalidade !== 'Comprado') a.devolver += num(b.devolvidas) || 0; acerto.set(k, a); });
+  bs.forEach(b => { const c = bebidaCalc(b), k = byId('Fornecedores', b.fornecedor_id)?.nome || 'Sem fornecedor', a = acerto.get(k) || { consumidas: 0, pagar: 0, devolver: 0, pendente: 0 };
+    a.consumidas += c.consumidas || 0; a.pagar += c.pagar || 0; a.pendente += c.pendente; if (b.modalidade !== 'Comprado') a.devolver += num(b.devolvidas) || 0; acerto.set(k, a); });
   $('#main').innerHTML = head('Bebidas', `Preço livre por rótulo. Taça = 150 ml, ${TACAS} taças por garrafa.`, '<button class="btn small" data-act="nova-bebida">+ Bebida</button>') + `
-    <div class="card accent"><h3>Acerto com fornecedores</h3><p class="mini" style="margin-top:-6px">Preencha garrafas recebidas e, no dia seguinte, as devolvidas (fechadas). Consumidas = recebidas − devolvidas.</p>
-      <div class="scroll"><table class="t"><tr><th>Fornecedor</th><th class="n">Consumidas</th><th class="n">Devolver</th><th class="n">A pagar</th></tr>
-      ${[...acerto].map(([k, a]) => `<tr><td>${esc(k)}</td><td class="n">${a.consumidas}</td><td class="n">${a.devolver}</td><td class="n">${money(a.pagar)}</td></tr>`).join('')}
-      <tr class="sum"><td>Total</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.consumidas, 0)}</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.devolver, 0)}</td><td class="n">${money([...acerto.values()].reduce((s, a) => s + a.pagar, 0))}</td></tr></table></div></div>
+    <div class="card accent"><h3>Acerto com fornecedores</h3><p class="mini" style="margin-top:-6px">Preencha garrafas recebidas e, no dia seguinte, as devolvidas (fechadas). Consumidas = recebidas − devolvidas. Vinho consignado só entra no custo depois que a devolução for preenchida (se não voltou nenhuma, coloque 0).</p>
+      <div class="scroll"><table class="t"><tr><th>Fornecedor</th><th class="n">Consumidas</th><th class="n">Devolver</th><th class="n">A pagar</th><th class="n">Aguardando devolução</th></tr>
+      ${[...acerto].map(([k, a]) => `<tr><td>${esc(k)}</td><td class="n">${a.consumidas}</td><td class="n">${a.devolver}</td><td class="n">${money(a.pagar)}</td><td class="n">${a.pendente ? 'até ' + money(a.pendente) : '—'}</td></tr>`).join('')}
+      <tr class="sum"><td>Total</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.consumidas, 0)}</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.devolver, 0)}</td><td class="n">${money([...acerto.values()].reduce((s, a) => s + a.pagar, 0))}</td><td class="n">${(t => t ? 'até ' + money(t) : '—')([...acerto.values()].reduce((s, a) => s + a.pendente, 0))}</td></tr></table></div></div>
     <div class="card">${bs.map(b => { const c = bebidaCalc(b), harm = pratos.filter(p => p.bebida_id === b.id).map(p => receita(p.receita_id)?.nome).filter(Boolean);
       return row(`${field('Bebidas', b, { f: 'rotulo', l: 'Rótulo', w: 4, wide: 1 })}
         ${field('Bebidas', b, { f: 'fornecedor_id', l: 'Fornecedor', t: 'select', o: forn, blank: '—', w: 3 })}
@@ -639,7 +645,7 @@ function bebidas() {
         ${field('Bebidas', b, { f: 'preco_taca', l: 'Preço taça', t: 'num' })}
         ${field('Bebidas', b, { f: 'recebidas', l: 'Recebidas', t: 'num', w: 1 })}
         ${field('Bebidas', b, { f: 'devolvidas', l: 'Devolvidas', t: 'num', w: 1 })}
-        ${cell(`<b>${c.consumidas ?? '—'}</b> consumidas<small>a pagar ${money(c.pagar)}</small>`, 3)}
+        ${cell(c.aguardando ? `<b>aguardando devolução</b><small>em consignação: até ${money(c.pendente)}</small>` : `<b>${c.consumidas ?? '—'}</b> consumidas<small>a pagar ${money(c.pagar)}</small>`, 3)}
         ${cell(`<small>custo/taça ${money(c.custoTaca)} · margem garrafa ${money(c.margemGarrafa)} · margem taça ${money(c.margemTaca)}${harm.length ? ` · com ${esc(harm.join(', '))}` : ''}</small>`, 6, 1)}
         ${field('Bebidas', b, { f: 'observacao', l: 'Observação', w: 6, wide: 1 })}`); }).join('') || '<p class="empty">Nenhuma bebida ainda.</p>'}</div>
     ${datalist('dl-btipo', L.bebidaTipo)}`;
@@ -679,7 +685,7 @@ function telaEvento() {
           <tr><td>Bebidas vendidas</td><td class="n">${money(fc.bebidasVendidas)}</td></tr>
           <tr><td>Compras (custo lançado)</td><td class="n">− ${money(fc.compras)}</td></tr>
           <tr><td>Custos extras</td><td class="n">− ${money(fc.custos)}</td></tr>
-          <tr><td>Acerto com vinícolas</td><td class="n">− ${money(fc.vinicolas)}</td></tr>
+          <tr><td>Acerto com vinícolas${fc.vinicolasPendente ? `<br><span class="mini">consignado aguardando devolução: até ${money(fc.vinicolasPendente)} (fora do resultado)</span>` : ''}</td><td class="n">− ${money(fc.vinicolas)}</td></tr>
           <tr class="sum"><td>Resultado</td><td class="n" style="color:${fc.resultado < 0 ? 'var(--red)' : 'var(--green)'}">${money(fc.resultado)}</td></tr>
         </table>
       </div>` : ''}
