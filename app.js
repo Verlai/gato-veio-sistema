@@ -323,7 +323,7 @@ function criarEvento(f) {
 }
 
 /* ---------- componentes ---------- */
-const head = (title, sub, actions = '') => `<div class="head"><div><span class="overline">${esc((ev().nome || 'Gato Véio').toUpperCase())}</span><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div><div class="actions">${actions}</div></div>`;
+const head = (title, sub, actions = '') => `<div class="head"><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${actions ? `<div class="actions">${actions}</div>` : ''}</div>`;
 function field(tab, r, c) {
   const de = `data-e="${tab}|${esc(r.id)}|${c.f}"`, v = r[c.f] ?? '';
   let input;
@@ -335,22 +335,32 @@ function field(tab, r, c) {
 const cell = (html, w = 2, wide) => `<div class="cell ${wide ? 'wide' : ''}" style="--w:${w}">${html}</div>`;
 const xbtn = (tab, id, what = 'registro') => `<div class="x"><button class="xbtn" data-del="${tab}|${esc(id)}" title="Remover ${what}" aria-label="Remover ${what}">✕</button></div>`;
 const row = (inner, cls = '') => `<div class="row ${cls}">${inner}</div>`;
+const pill = (txt, cls = '') => `<span class="pill ${cls}">${esc(txt)}</span>`;
+const PILL = {
+  Pago: 'ok', Lista: 'wait', Espera: '', Desistiu: 'off',
+  Aprovado: 'ok', 'Em teste': 'wait', Candidato: '', Descartado: 'off',
+  Comprado: 'ok', 'Já tenho': 'ok', Comprar: 'wait',
+};
+// Linha de lista: toque abre o editor. `lead` = controle à esquerda (ex.: marcar), `end` = valores à direita.
+function item({ open, lead = '', title, sub = '', end = '', cls = '' }) {
+  return `<div class="item ${cls}">${lead}<div class="item-main" role="button" tabindex="0" data-open="${esc(open)}">
+    <div class="item-text"><span class="item-title">${title}</span>${sub ? `<span class="item-sub">${sub}</span>` : ''}</div>
+    ${end ? `<div class="item-end">${end}</div>` : ''}</div></div>`;
+}
+const section = (title, body, extra = '') => `<section class="sheet">${title ? `<div class="sheet-h"><h3>${title}</h3>${extra}</div>` : ''}${body}</section>`;
+const emptyMsg = t => `<p class="empty">${t}</p>`;
 
 function taskHTML(t, o = {}) {
   const late = t.data && t.data < today() && !isDone(t);
-  const pills = [];
-  if (o.date) pills.push(`<span class="pill ${late ? 'late' : ''}">${esc(fmtLong(t.data))}${t.hora ? ' ' + esc(t.hora) : ''}</span>`);
-  else if (t.hora) pills.push(`<span class="pill dark">${esc(t.hora)}</span>`);
-  if (late && !o.date) pills.push('<span class="pill late">atrasada</span>');
-  pills.push(`<span class="pill">${esc(t.fase || 'sem fase')}</span>`);
+  const when = [o.date && t.data ? fmtLong(t.data) : '', t.hora].filter(Boolean).join(' às ');
+  const meta = [when, t.fase].filter(Boolean).join('  ·  ');
   return `<div class="task ${isDone(t) ? 'done' : ''}">
     <button class="check ${isDone(t) ? 'on' : ''}" data-done="${esc(t.id)}" aria-label="${isDone(t) ? 'Reabrir' : 'Concluir'}">${isDone(t) ? '✓' : ''}</button>
-    <div class="task-body">
-      <button class="task-title" data-edit-task="${esc(t.id)}">${esc(t.tarefa)}</button>
-      <div class="meta">${pills.join('')}</div>
-      ${t.nota ? `<p class="note-txt">${esc(t.nota)}</p>` : ''}
+    <div class="task-body" role="button" tabindex="0" data-edit-task="${esc(t.id)}">
+      <span class="task-title">${esc(t.tarefa)}</span>
+      <span class="task-meta">${late ? '<b class="late-txt">atrasada</b> ' : ''}${esc(meta)}</span>
+      ${t.nota ? `<span class="note-txt">${esc(t.nota)}</span>` : ''}
     </div>
-    ${o.edit ? `<div class="when-edit"><input type="date" data-e="Tarefas|${esc(t.id)}|data" value="${esc(t.data)}" aria-label="Data"><input type="time" data-e="Tarefas|${esc(t.id)}|hora" value="${esc(t.hora)}" aria-label="Horário"></div>` : ''}
   </div>`;
 }
 
@@ -360,13 +370,13 @@ function render() {
   $('#ev-name').textContent = e.nome || 'Gato Véio';
   if (e.data) {
     const d = diffDays(e.data, today()), r = reservas(), ts = tasks();
-    $('#ev-when').innerHTML = `${esc(fmtLong(e.data))}/${e.data.slice(0, 4)} às ${esc(e.hora || '—')}${e.tema ? ` <span aria-hidden="true">✦</span> ${esc(e.tema)}` : ''}`;
-    $('#stats').innerHTML = [d > 0 ? `faltam ${d} dia${d > 1 ? 's' : ''}` : d === 0 ? 'é hoje!' : `foi há ${-d} dia${d < -1 ? 's' : ''}`,
-      `${r.pagos.length}/${r.cap || '?'} pagos`, `${ts.filter(isDone).length}/${ts.length} tarefas`].map(s => `<span>${s}</span>`).join('');
-  } else { $('#ev-when').textContent = 'Nenhum evento ainda: crie o primeiro na aba Evento'; $('#stats').innerHTML = ''; }
+    $('#ev-when').textContent = `${fmtLong(e.data)}/${e.data.slice(0, 4)} às ${e.hora || '—'}${e.tema ? ` · ${e.tema}` : ''}`;
+    $('#stats').innerHTML = `<span class="count">${d > 0 ? `faltam <b>${d}</b> dia${d > 1 ? 's' : ''}` : d === 0 ? '<b>é hoje!</b>' : `foi há ${-d} dia${d < -1 ? 's' : ''}`}</span>
+      <span>${r.pagos.length} de ${r.cap || '?'} pagos</span><span>${ts.filter(isDone).length} de ${ts.length} tarefas</span>`;
+  } else { $('#ev-when').textContent = 'Nenhum evento ainda. Crie o primeiro na aba Evento.'; $('#stats').innerHTML = ''; }
   setSync();
   if (!evId && !['evento', 'receitas', 'cadastros'].includes(page)) page = 'evento';
-  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.querySelectorAll('#tabs button').forEach(b => { b.classList.toggle('active', b.dataset.page === page); b.setAttribute('aria-current', b.dataset.page === page ? 'page' : 'false'); });
   ({ hoje, tarefas, reservas: telaReservas, cardapio, receitas: telaReceitas, compras, bebidas, evento: telaEvento, cadastros })[page]();
 }
 
@@ -382,17 +392,12 @@ function periodo() {
   return { p: 'custom', de, ate };
 }
 
-function hoje() {
-  const e = ev(), t0 = today(), ts = tasks(), r = reservas(), per = periodo();
-  const noPeriodo = ts.filter(t => t.data && t.data >= per.de && t.data <= per.ate && !(prefs.ocultarFeitas && isDone(t)));
-  const pendPeriodo = noPeriodo.filter(t => !isDone(t)).length;
-  const late = ts.filter(t => t.data && t.data < t0 && !isDone(t));
-  const done = ts.filter(isDone).length, pct = ts.length ? Math.round(done / ts.length * 100) : 0;
-  const avisos = [];
+function avisosDoEvento() {
+  const e = ev(), t0 = today(), r = reservas(), avisos = [];
   if (e.prazo_pagamento) {
     const dp = diffDays(e.prazo_pagamento, t0);
     if (dp >= 0 && dp <= 3 && r.lista.length) avisos.push([`Prazo de pagamento ${dp === 0 ? 'é hoje' : `em ${dp} dia(s)`}: ${r.lista.length} na lista sem pagar`, 'reservas']);
-    if (dp < 0 && r.lista.length) avisos.push([`Prazo passou: ${r.lista.length} da lista não pagaram. Liberar as vagas para a espera (${r.espera.length})`, 'reservas', 1]);
+    if (dp < 0 && r.lista.length) avisos.push([`O prazo passou e ${r.lista.length} da lista não pagaram. Libere as vagas para a espera (${r.espera.length}).`, 'reservas', 1]);
     if (dp < 0 && !r.lista.length && r.vagas && r.espera.length) avisos.push([`${r.vagas} vaga(s) aberta(s) e ${r.espera.length} na espera`, 'reservas']);
   }
   if (r.pagos.length > r.cap && r.cap) avisos.push([`Mais pagos (${r.pagos.length}) que lugares (${r.cap})`, 'reservas', 1]);
@@ -406,32 +411,39 @@ function hoje() {
     const pend = of('Compras').filter(c => c.status === 'Comprar').length;
     if (pend) avisos.push([`${pend} item(ns) de compra pendente(s)`, 'compras']);
   }
+  return avisos;
+}
+
+function hoje() {
+  const e = ev(), t0 = today(), ts = tasks(), r = reservas(), per = periodo();
+  const noPeriodo = ts.filter(t => t.data && t.data >= per.de && t.data <= per.ate && !(prefs.ocultarFeitas && isDone(t)));
+  const pendPeriodo = noPeriodo.filter(t => !isDone(t)).length;
+  const late = ts.filter(t => t.data && t.data < t0 && !isDone(t));
+  const done = ts.filter(isDone).length, pct = ts.length ? Math.round(done / ts.length * 100) : 0;
+  const avisos = avisosDoEvento();
   const dP = e.prazo_pagamento ? diffDays(e.prazo_pagamento, t0) : null;
   const dias = new Map(); noPeriodo.forEach(t => { if (!dias.has(t.data)) dias.set(t.data, []); dias.get(t.data).push(t); });
   const titulo = per.de === per.ate ? (per.de === t0 ? 'Hoje' : per.de === addDays(t0, 1) ? 'Amanhã' : fmtLong(per.de)) : `${fmtLong(per.de)} a ${fmtLong(per.ate)}`;
   const chip = (k, l) => `<button class="${per.p === k ? 'active' : ''}" data-periodo="${k}">${l}</button>`;
-  $('#main').innerHTML = head('Início', `${fmtLong(t0)} · escolha o período para ver as tarefas.`,
-      MODE === 'n8n' ? '<button class="btn light small" data-act="resumo">Mandar o resumo por e-mail agora</button>' : '') + `
-    <div class="grid four">
-      <div class="card kpi accent"><div class="lbl">TAREFAS</div><div class="num">${pct}%</div><div class="bar"><i style="width:${pct}%"></i></div><div class="mini">${done} de ${ts.length} feitas</div></div>
-      <div class="card kpi"><div class="lbl">ATRASADAS</div><div class="num" style="color:${late.length ? 'var(--red)' : 'var(--green)'}">${late.length}</div><div class="mini">prazo anterior a hoje</div></div>
-      <div class="card kpi"><div class="lbl">PAGOS</div><div class="num">${r.pagos.length}<small> / ${r.cap || '?'}</small></div><div class="mini">${r.lista.length} na lista · ${r.espera.length} na espera</div></div>
-      <div class="card kpi"><div class="lbl">PRAZO DE PAGAMENTO</div><div class="num" style="font-size:1.5rem">${e.prazo_pagamento ? esc(fmtLong(e.prazo_pagamento)) : '—'}</div><div class="mini">${dP == null ? 'não definido' : dP > 0 ? `em ${dP} dia(s)` : dP === 0 ? 'é hoje' : 'encerrado'}</div></div>
+  const lista = [...dias].map(([d, l]) => `${per.de !== per.ate ? `<div class="group-h">${esc(fmtLong(d))}${d === t0 ? ' · hoje' : ''}</div>` : ''}${l.map(t => taskHTML(t)).join('')}`).join('');
+  $('#main').innerHTML = `
+    <div class="summary">
+      <div class="stat"><span class="stat-n">${pct}%</span><span class="stat-l">das tarefas feitas</span><div class="bar"><i style="width:${pct}%"></i></div></div>
+      <div class="stat"><span class="stat-n">${r.pagos.length}<small>/${r.cap || '?'}</small></span><span class="stat-l">pagos · ${r.lista.length} na lista, ${r.espera.length} na espera</span></div>
+      <div class="stat ${late.length ? 'bad' : ''}"><span class="stat-n">${late.length}</span><span class="stat-l">tarefa${late.length === 1 ? '' : 's'} atrasada${late.length === 1 ? '' : 's'}</span></div>
+      <div class="stat"><span class="stat-n stat-date">${e.prazo_pagamento ? esc(fmt(e.prazo_pagamento)) : '—'}</span><span class="stat-l">prazo de pagamento${dP == null ? '' : dP > 0 ? ` · em ${dP} dia${dP > 1 ? 's' : ''}` : dP === 0 ? ' · hoje' : ' · encerrado'}</span></div>
     </div>
-    <div class="card accent" style="margin-top:16px">
-      <div class="toolbar" style="margin-bottom:10px">
-        <div class="subtabs" style="margin:0">${chip('hoje', 'Hoje')}${chip('amanha', 'Amanhã')}${chip('semana', 'Esta semana')}${chip('7dias', 'Próximos 7 dias')}${e.data && e.data >= t0 ? chip('evento', 'Até o evento') : ''}</div>
-        <label class="f">De<input type="date" id="per-de" value="${per.de}"></label>
-        <label class="f">Até<input type="date" id="per-ate" value="${per.ate}"></label>
-        <label class="chk"><input type="checkbox" id="ocultar" ${prefs.ocultarFeitas ? 'checked' : ''}> ocultar feitas</label>
-      </div>
-      <h3>${esc(titulo)} <span class="mini">· ${pendPeriodo} pendente(s)${noPeriodo.length - pendPeriodo ? `, ${noPeriodo.length - pendPeriodo} feita(s)` : ''}</span></h3>
-      ${[...dias].map(([d, l]) => `${per.de !== per.ate ? `<div class="group-h">${esc(fmtLong(d))}${d === t0 ? ' <span class="pill dark">hoje</span>' : ''}</div>` : ''}${l.map(t => taskHTML(t)).join('')}`).join('') || '<p class="empty">Nenhuma tarefa nesse período.</p>'}
+    ${avisos.length ? `<div class="alerts">${avisos.map(([m, p, bad]) => `<button class="alert ${bad ? 'bad' : ''}" data-nav="${p}"><span>${esc(m)}</span><span class="go">Abrir</span></button>`).join('')}</div>` : ''}
+    <div class="layout-2">
+      ${section(`${esc(titulo)} <span class="count-sub">${pendPeriodo} pendente${pendPeriodo === 1 ? '' : 's'}</span>`,
+        `<div class="seg" role="group" aria-label="Período">${chip('hoje', 'Hoje')}${chip('amanha', 'Amanhã')}${chip('semana', 'Esta semana')}${chip('7dias', '7 dias')}${e.data && e.data >= t0 ? chip('evento', 'Até o evento') : ''}</div>
+        <details class="more" ${per.p === 'custom' ? 'open' : ''}><summary>Outro período</summary><div class="inline-fields">
+          <label class="f">De<input type="date" id="per-de" value="${per.de}"></label><label class="f">Até<input type="date" id="per-ate" value="${per.ate}"></label>
+          <label class="chk"><input type="checkbox" id="ocultar" ${prefs.ocultarFeitas ? 'checked' : ''}> Ocultar feitas</label></div></details>
+        ${lista || emptyMsg('Nenhuma tarefa nesse período.')}`)}
+      ${section(`Atrasadas <span class="count-sub">${late.length}</span>`, late.map(t => taskHTML(t, { date: 1 })).join('') || emptyMsg('Tudo em dia.'))}
     </div>
-    <div class="grid" style="margin-top:16px">
-      <div class="card"><h3>Atrasadas (${late.length})</h3>${late.map(t => taskHTML(t, { date: 1 })).join('') || '<p class="empty">Tudo em dia.</p>'}</div>
-      <div class="card"><h3>Avisos</h3>${avisos.length ? `<ul class="alerts">${avisos.map(([m, p, bad]) => `<li class="${bad ? 'bad' : ''}">${esc(m)} <button class="linkbtn" data-nav="${p}">abrir</button></li>`).join('')}</ul>` : '<p class="empty">Nenhum aviso.</p>'}</div>
-    </div>`;
+    ${MODE === 'n8n' ? '<p class="foot-act"><button class="linkbtn" data-act="resumo">Mandar o resumo por e-mail agora</button></p>' : ''}`;
 }
 
 function tarefas() {
@@ -442,17 +454,16 @@ function tarefas() {
     [...L.fases, ...new Set(shown.map(t => t.fase).filter(f => !L.fases.includes(f)))].forEach(f => groups.set(f, []));
     shown.forEach(t => { if (!groups.has(t.fase || 'Sem fase')) groups.set(t.fase || 'Sem fase', []); groups.get(t.fase || 'Sem fase').push(t); });
   } else shown.forEach(t => { const k = t.data || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
-  const label = k => prefs.tarefasPor === 'fase' ? esc(k) : k ? esc(fmtLong(k)) + (k === t0 ? ' <span class="pill dark">hoje</span>' : '') : 'Sem data';
-  $('#main').innerHTML = head('Tarefas', 'Toque no círculo para concluir e no nome para editar. Data e horário dá para mudar direto na lista.',
-      '<button class="btn small" data-act="nova-tarefa">+ Nova tarefa</button><button class="btn small light" data-act="gerar-producao">Gerar plano de produção</button>') + `
+  const label = k => prefs.tarefasPor === 'fase' ? esc(k) : k ? esc(fmtLong(k)) + (k === t0 ? ' · hoje' : '') : 'Sem data';
+  $('#main').innerHTML = head('Tarefas', `${all.filter(isDone).length} de ${all.length} feitas. Toque numa tarefa para editar.`,
+      '<button class="btn" data-act="nova-tarefa">Nova tarefa</button>') + `
     <div class="toolbar">
-      <div class="subtabs" style="margin:0"><button class="${prefs.tarefasPor === 'data' ? 'active' : ''}" data-pref="tarefasPor" data-val="data">Por data</button><button class="${prefs.tarefasPor === 'fase' ? 'active' : ''}" data-pref="tarefasPor" data-val="fase">Por fase</button></div>
-      <label class="chk"><input type="checkbox" id="ocultar" ${prefs.ocultarFeitas ? 'checked' : ''}> ocultar feitas</label>
-      <span class="mini">${all.filter(isDone).length} de ${all.length} feitas</span>
+      <div class="seg" role="group" aria-label="Agrupar"><button class="${prefs.tarefasPor === 'data' ? 'active' : ''}" data-pref="tarefasPor" data-val="data">Por data</button><button class="${prefs.tarefasPor === 'fase' ? 'active' : ''}" data-pref="tarefasPor" data-val="fase">Por fase</button></div>
+      <label class="chk"><input type="checkbox" id="ocultar" ${prefs.ocultarFeitas ? 'checked' : ''}> Ocultar feitas</label>
     </div>
-    <div class="card">${[...groups].filter(([, l]) => l.length).map(([k, l]) => `<div class="group-h ${prefs.tarefasPor === 'data' && k && k < t0 && l.some(t => !isDone(t)) ? 'late' : ''}">${label(k)}</div>
-      ${l.map(t => taskHTML(t, { edit: 1, date: prefs.tarefasPor === 'fase' })).join('')}`).join('') || '<p class="empty">Nenhuma tarefa.</p>'}</div>
-    <p class="mini" style="margin-top:12px">O plano de produção cria uma tarefa para cada passo das receitas <b>aprovadas</b> no Cardápio, na data e hora que o passo pede. Rodar de novo atualiza sem duplicar.</p>`;
+    ${section('', [...groups].filter(([, l]) => l.length).map(([k, l]) => `<div class="group-h ${prefs.tarefasPor === 'data' && k && k < t0 && l.some(t => !isDone(t)) ? 'late' : ''}">${label(k)}</div>
+      ${l.map(t => taskHTML(t, { date: prefs.tarefasPor === 'fase' })).join('')}`).join('') || emptyMsg('Nenhuma tarefa.'))}
+    <div class="hint"><p>O plano de produção cria uma tarefa para cada passo das receitas aprovadas no Cardápio. Rodar de novo atualiza sem duplicar.</p><button class="btn ghost small" data-act="gerar-producao">Gerar plano de produção</button></div>`;
 }
 
 function telaReservas() {
@@ -460,56 +471,50 @@ function telaReservas() {
   const nomes = DB.Pessoas.filter(live).map(p => p.nome);
   const sugerido = r.pagos.length + r.lista.length >= r.cap && r.cap ? 'Espera' : 'Lista';
   const linha = (x, i) => { const p = pessoa(x.pessoa_id);
-    return row(`${cell(`<span class="rowtitle">${i != null ? `${i + 1}. ` : ''}${esc(p.nome)}</span><small>${esc([p.telefone, p.instagram, p.restricao && '⚠ ' + p.restricao].filter(Boolean).join(' · ') || 'sem contato')}</small>`, 4, 1)}
-      ${field('Reservas', x, { f: 'status', l: 'Status', t: 'select', o: L.reserva })}
-      ${field('Reservas', x, { f: 'entrada', l: 'Entrou em', t: 'date' })}
-      ${x.status === 'Pago' ? field('Reservas', x, { f: 'pagamento', l: 'Pagou em', t: 'date' }) + field('Reservas', x, { f: 'valor_pago', l: 'Valor R$', t: 'num', ph: fmtNum(num(e.valor_ingresso)), w: 1 })
-        : `<div class="cell" style="--w:3">${x.status !== 'Desistiu' ? `<button class="btn small" data-pagou="${esc(x.id)}">Pagou</button>` : ''}</div>`}
-      ${xbtn('Reservas', x.id, 'reserva')}`, x.status === 'Desistiu' ? 'off' : ''); };
-  const bloco = (titulo, list, numbered, vazio) => `<h4>${titulo} (${list.length})</h4>${list.map((x, i) => linha(x, numbered ? i : null)).join('') || `<p class="empty">${vazio}</p>`}`;
+    const contato = [p.telefone, p.instagram].filter(Boolean).join(' · ');
+    const end = x.status === 'Pago' ? `<span class="money">${money(valorReserva(x))}</span>`
+      : x.status !== 'Desistiu' ? `<button class="btn small ghost" data-pagou="${esc(x.id)}">Marcar pago</button>` : '';
+    return item({ open: `Reservas|${x.id}`, cls: x.status === 'Desistiu' ? 'off' : '',
+      title: `${i != null ? `<span class="pos">${i + 1}</span>` : ''}${esc(p.nome)}`,
+      sub: [contato && esc(contato), p.restricao && `<span class="warn-txt">${esc(p.restricao)}</span>`, x.status === 'Pago' && x.pagamento ? `pagou ${esc(fmt(x.pagamento))}` : x.entrada ? `entrou ${esc(fmt(x.entrada))}` : ''].filter(Boolean).join(' · '),
+      end }); };
+  const bloco = (titulo, list, numbered, vazio) => section(`${titulo} <span class="count-sub">${list.length}</span>`, list.map((x, i) => linha(x, numbered ? i : null)).join('') || emptyMsg(vazio));
   let aviso = '';
-  if (dP != null && dP < 0 && r.lista.length) aviso = `<div class="notice bad"><b>O prazo de pagamento passou.</b> ${r.lista.length} pessoa(s) da lista não pagaram. Avise que a vaga foi liberada (mude para <i>Desistiu</i>) e chame a espera: quem pagar primeiro fica.</div>`;
+  if (dP != null && dP < 0 && r.lista.length) aviso = `<div class="notice bad"><b>O prazo de pagamento passou.</b> ${r.lista.length} pessoa(s) da lista não pagaram. Avise que a vaga foi liberada (status <i>Desistiu</i>) e chame a espera: quem pagar primeiro fica.</div>`;
   else if (dP != null && dP < 0 && r.vagas && r.espera.length) aviso = `<div class="notice warn">${r.vagas} vaga(s) aberta(s). A espera já pode pagar: quem pagar primeiro fica.</div>`;
-  else if (dP != null && dP >= 0) aviso = `<div class="notice">Prazo de pagamento: <b>${esc(fmtLong(e.prazo_pagamento))}</b>${dP ? ` (em ${dP} dia${dP > 1 ? 's' : ''})` : ' (hoje)'}. Até lá, quem não pagou segue na lista; quem chega com a lista cheia vai para a espera.</div>`;
-  $('#main').innerHTML = head('Reservas', `Cada reserva é uma pessoa. Ingresso: ${num(e.valor_ingresso) != null ? money(num(e.valor_ingresso)) : '<b>sem valor</b> (aba Evento)'}.`) + aviso + `
-    <div class="card accent">
-      <div class="totals" style="margin-bottom:14px"><span>Pagos <b>${r.pagos.length}/${r.cap || '?'}</b></span><span>Vagas <b>${r.vagas}</b></span><span>Lista <b>${r.lista.length}</b></span><span>Espera <b>${r.espera.length}</b></span><span>Recebido <b>${money(r.pagos.reduce((s, x) => s + valorReserva(x), 0))}</b></span></div>
-      <form id="f-reserva" class="toolbar" style="margin:0" autocomplete="off">
-        <label class="f" style="flex:2 1 200px">Nome<input name="nome" list="dl-pessoas" required placeholder="quem já veio aparece na lista"></label>
-        <label class="f" style="flex:1 1 150px">Telefone / @<input name="contato" placeholder="opcional"></label>
-        <label class="f" style="flex:0 1 140px">Entra como<select name="status">${opts(L.reserva.slice(0, 3), sugerido)}</select></label>
-        <button class="btn">Adicionar</button>
-      </form>
-      ${datalist('dl-pessoas', nomes)}
-    </div>
-    <div class="card">${bloco('Pagos · lugar confirmado', r.pagos, false, 'Ninguém pagou ainda.')}${bloco('Lista · reservou, falta pagar', r.lista, false, 'Ninguém na lista.')}${bloco('Espera · por ordem de chegada', r.espera, true, 'Ninguém na espera.')}
-      ${r.desist.length ? `<details style="margin-top:14px"><summary class="mini">Desistiram (${r.desist.length})</summary>${r.desist.map(x => linha(x)).join('')}</details>` : ''}</div>
-    <p class="mini" style="margin-top:12px">Telefone, @ e restrição alimentar ficam em Cadastros → Pessoas e valem para os próximos eventos.</p>`;
+  else if (dP != null && dP >= 0) aviso = `<div class="notice">Prazo de pagamento: <b>${esc(fmtLong(e.prazo_pagamento))}</b>${dP ? ` (em ${dP} dia${dP > 1 ? 's' : ''})` : ' (hoje)'}. Quem chega com a lista cheia vai para a espera.</div>`;
+  $('#main').innerHTML = head('Reservas', `Ingresso ${num(e.valor_ingresso) != null ? money(num(e.valor_ingresso)) : 'sem valor definido'} · recebido ${money(r.pagos.reduce((s, x) => s + valorReserva(x), 0))}`) + `
+    <div class="figures"><div><b>${r.pagos.length}<small>/${r.cap || '?'}</small></b><span>pagos</span></div><div><b>${r.vagas}</b><span>vagas</span></div><div><b>${r.lista.length}</b><span>na lista</span></div><div><b>${r.espera.length}</b><span>na espera</span></div></div>
+    ${aviso}
+    <form id="f-reserva" class="addbar" autocomplete="off">
+      <label class="f grow">Nome<input name="nome" list="dl-pessoas" required placeholder="Quem já veio aparece na lista"></label>
+      <label class="f">Telefone ou @<input name="contato" placeholder="Opcional"></label>
+      <label class="f">Entra como<select name="status">${opts(L.reserva.slice(0, 3), sugerido)}</select></label>
+      <button class="btn">Adicionar</button>
+    </form>${datalist('dl-pessoas', nomes)}
+    ${bloco('Pagos', r.pagos, false, 'Ninguém pagou ainda.')}
+    ${bloco('Na lista, falta pagar', r.lista, false, 'Ninguém na lista.')}
+    ${bloco('Espera', r.espera, true, 'Ninguém na espera.')}
+    ${r.desist.length ? `<details class="more sheet-like"><summary>Desistiram (${r.desist.length})</summary>${r.desist.map(x => linha(x)).join('')}</details>` : ''}`;
 }
 
 function cardapio() {
-  const base = basePessoas(), bebidas = of('Bebidas').map(b => [b.id, b.rotulo]);
+  const base = basePessoas();
   const recs = DB.Receitas.filter(live).sort((a, b) => a.nome.localeCompare(b.nome));
   const cs = of('Cardapio').sort((a, b) => (num(a.ordem) ?? 99) - (num(b.ordem) ?? 99) || (receita(a.receita_id)?.nome || '').localeCompare(receita(b.receita_id)?.nome || ''));
-  $('#main').innerHTML = head('Cardápio', 'Pratos do evento, na ordem de serviço. Só os <b>aprovados</b> entram na lista de mercado e no plano de produção.',
-      '<button class="btn small light" data-act="gerar-producao">Gerar plano de produção</button>') + `
-    <div class="card accent">
-      <form id="f-prato" class="toolbar" style="margin:0" autocomplete="off">
-        <label class="f" style="flex:2 1 240px">Prato (receita do livro ou nova)<input name="nome" list="dl-receitas" required></label>
-        <label class="f" style="flex:0 1 90px">Ordem<input name="ordem" inputmode="numeric" value="${(Math.max(0, ...cs.map(c => num(c.ordem) || 0)) || 0) + 1}"></label>
-        <button class="btn">Adicionar</button>
-      </form>${datalist('dl-receitas', recs.map(r => r.nome))}
-    </div>
-    <div class="card">${cs.map(c => { const r = receita(c.receita_id), falta = r ? receitaIncompleta(r) : ['receita'], pp = num(c.porcoes_pessoa);
-      return row(`${field('Cardapio', c, { f: 'ordem', l: 'Ordem', t: 'num', w: 1 })}
-        ${cell(`<span class="rowtitle">${esc(r?.nome || '(receita removida)')}</span><small>${falta.length ? `falta: ${falta.join(', ')}` : `rende ${esc(r.rende)} porções`} · <button class="linkbtn" data-open-rec="${esc(c.receita_id)}">abrir receita</button></small>`, 3)}
-        ${field('Cardapio', c, { f: 'porcoes_pessoa', l: 'Porções/pessoa', t: 'num', w: 1 })}
-        ${cell(`<b>${pp ? fmtNum(pp * base.n, 1) : '—'}</b><small>porções p/ ${base.n}</small>`, 1)}
-        ${field('Cardapio', c, { f: 'status', l: 'Status', t: 'select', o: L.prato })}
-        ${field('Cardapio', c, { f: 'bebida_id', l: 'Harmonização', t: 'select', o: bebidas, blank: '—', w: 2 })}
-        ${xbtn('Cardapio', c.id, 'prato')}
-        ${field('Cardapio', c, { f: 'teste', l: 'Teste / anotações', ph: 'data do teste, resultado, o que ajustar', w: 11, wide: 1 })}`, c.status === 'Descartado' ? 'off' : ''); }).join('') || '<p class="empty">Nenhum prato ainda.</p>'}</div>
-    <p class="mini" style="margin-top:12px">Porções calculadas para ${base.n} pessoas (${esc(base.label)}). Dá para mudar a base em Compras.</p>`;
+  $('#main').innerHTML = head('Cardápio', `Pratos na ordem de serviço, para ${base.n} pessoas. Só os aprovados entram nas compras e no plano de produção.`) + `
+    <form id="f-prato" class="addbar" autocomplete="off">
+      <label class="f grow">Prato (do livro de receitas ou novo)<input name="nome" list="dl-receitas" required></label>
+      <label class="f narrow">Ordem<input name="ordem" inputmode="numeric" value="${(Math.max(0, ...cs.map(c => num(c.ordem) || 0)) || 0) + 1}"></label>
+      <button class="btn">Adicionar</button>
+    </form>${datalist('dl-receitas', recs.map(r => r.nome))}
+    ${section('', cs.map(c => { const r = receita(c.receita_id), falta = r ? receitaIncompleta(r) : ['receita'], pp = num(c.porcoes_pessoa), b = byId('Bebidas', c.bebida_id);
+      return item({ open: `Cardapio|${c.id}`, cls: c.status === 'Descartado' ? 'off' : '',
+        lead: `<span class="ord">${esc(c.ordem || '·')}</span>`,
+        title: esc(r?.nome || '(receita removida)'),
+        sub: [pp ? `${fmtNum(pp * base.n, 1)} porções` : 'sem porções', b && `com ${esc(b.rotulo)}`, falta.length && `<span class="warn-txt">falta ${esc(falta.join(', '))}</span>`].filter(Boolean).join(' · '),
+        end: pill(c.status || 'Candidato', PILL[c.status]) }); }).join('') || emptyMsg('Nenhum prato ainda. Adicione o primeiro acima.'))}
+    <div class="hint"><p>As porções usam a base de ${base.n} pessoas (${esc(base.label)}). Dá para mudar em Compras.</p><button class="btn ghost small" data-act="gerar-producao">Gerar plano de produção</button></div>`;
 }
 
 function telaReceitas() {
@@ -518,15 +523,15 @@ function telaReceitas() {
   if (!recSel || !receita(recSel) || !live(receita(recSel))) recSel = (of('Cardapio').map(c => c.receita_id).find(id => receita(id)) || recs[0]?.id) || null;
   const noEvento = new Set(of('Cardapio').map(c => c.receita_id));
   const r = recSel ? receita(recSel) : null;
-  let editor = '<p class="empty">Nenhuma receita. Crie a primeira.</p>';
+  let editor = emptyMsg('Nenhuma receita. Crie a primeira.');
   if (r) {
     const itens = itensDe(r.id), passos = passosDe(r.id), falta = receitaIncompleta(r);
     const usos = DB.Cardapio.filter(c => live(c) && c.receita_id === r.id).map(c => byId('Eventos', c.evento_id)?.nome).filter(Boolean);
     editor = `
-      <div class="card accent">
-        <div class="head" style="margin-bottom:10px"><div><h3 style="margin:0">${esc(r.nome)}</h3><p class="mini">${falta.length ? `Falta: ${falta.join(', ')}` : 'Receita completa'}${usos.length ? ` · usada em: ${esc([...new Set(usos)].join(', '))}` : ''}</p></div>
-          <button class="btn small danger" data-del="Receitas|${esc(r.id)}">Excluir receita</button></div>
-        <div class="row" style="padding-top:0">
+      <section class="sheet">
+        <div class="sheet-h"><div><h3>${esc(r.nome)}</h3><p class="mini">${falta.length ? `<span class="warn-txt">Falta: ${esc(falta.join(', '))}</span>` : 'Receita completa'}${usos.length ? ` · usada em ${esc([...new Set(usos)].join(', '))}` : ''}</p></div>
+          <button class="btn small danger" data-del="Receitas|${esc(r.id)}">Excluir</button></div>
+        <div class="row">
           ${field('Receitas', r, { f: 'nome', l: 'Nome', w: 5, wide: 1 })}
           ${field('Receitas', r, { f: 'categoria', l: 'Categoria', list: 'dl-cat', w: 3 })}
           ${field('Receitas', r, { f: 'rende', l: 'Rende (porções)', t: 'num', w: 2 })}
@@ -534,46 +539,46 @@ function telaReceitas() {
           ${field('Receitas', r, { f: 'preparo', l: 'Modo de preparo', t: 'textarea', w: 12, wide: 1 })}
           ${field('Receitas', r, { f: 'observacoes', l: 'Observações', t: 'textarea', w: 12, wide: 1 })}
         </div>
-      </div>
-      <div class="card">
-        <h3>Ingredientes <span class="mini">(quantidade para o rendimento acima; vazio = a gosto)</span></h3>
+      </section>
+      <section class="sheet">
+        <div class="sheet-h"><h3>Ingredientes</h3><span class="mini">quantidade para o rendimento; vazio = a gosto</span></div>
         ${itens.map(i => { const g = ingrediente(i.ingrediente_id) || { id: '', nome: '?' };
           return row(`<label class="f" style="--w:4">Ingrediente<input data-item-ing="${esc(i.id)}" list="dl-ing" value="${esc(g.nome)}"></label>
             ${field('Receita_Itens', i, { f: 'quantidade', l: 'Qtd', t: 'num', w: 1, ph: 'a gosto' })}
             ${g.id ? field('Ingredientes', g, { f: 'unidade', l: 'Unidade', t: 'select', o: L.unidades, blank: '—', w: 2 }) : cell('', 2)}
-            ${field('Receita_Itens', i, { f: 'observacao', l: 'Obs.', w: 2, ph: 'ex.: só a gema' })}
-            ${cell(g.id ? `<small>${esc(compraResumo(g))}</small><button class="linkbtn" data-ing-dlg="${esc(g.id)}">compra</button>` : '', 2)}
-            ${xbtn('Receita_Itens', i.id, 'ingrediente')}`); }).join('') || '<p class="empty">Nenhum ingrediente ainda.</p>'}
-        <form id="f-item" class="toolbar" style="margin:14px 0 0" autocomplete="off">
-          <label class="f" style="flex:2 1 200px">Ingrediente<input name="nome" list="dl-ing" required></label>
-          <label class="f" style="flex:0 1 90px">Qtd<input name="qtd" inputmode="decimal" placeholder="a gosto"></label>
-          <label class="f" style="flex:0 1 130px">Unidade (se novo)<select name="unidade">${opts(L.unidades, 'colher')}</select></label>
+            ${field('Receita_Itens', i, { f: 'observacao', l: 'Obs.', w: 3, ph: 'ex.: só a gema' })}
+            ${cell(g.id ? `<button class="linkbtn" data-open="Ingredientes|${esc(g.id)}">Compra</button>` : '', 1)}
+            ${xbtn('Receita_Itens', i.id, 'ingrediente')}`, 'compact'); }).join('') || emptyMsg('Nenhum ingrediente ainda.')}
+        <form id="f-item" class="addbar inset" autocomplete="off">
+          <label class="f grow">Ingrediente<input name="nome" list="dl-ing" required></label>
+          <label class="f narrow">Qtd<input name="qtd" inputmode="decimal" placeholder="a gosto"></label>
+          <label class="f">Unidade (se novo)<select name="unidade">${opts(L.unidades, 'colher')}</select></label>
           <button class="btn">Adicionar</button>
         </form>
-      </div>
-      <div class="card">
-        <h3>Passos <span class="mini">(viram tarefas no plano de produção)</span></h3>
+      </section>
+      <section class="sheet">
+        <div class="sheet-h"><h3>Passos</h3><span class="mini">viram tarefas no plano de produção</span></div>
         ${passos.map(p => row(`${field('Receita_Passos', p, { f: 'ordem', l: 'Nº', t: 'num', w: 1 })}
-          ${field('Receita_Passos', p, { f: 'passo', l: 'Passo', w: 5, wide: 1 })}
+          ${field('Receita_Passos', p, { f: 'passo', l: 'Passo', w: 6, wide: 1 })}
           ${field('Receita_Passos', p, { f: 'quando', l: 'Quando', t: 'select', o: [['dias', 'dias antes'], ['horas', 'horas antes do início']] })}
-          ${field('Receita_Passos', p, { f: 'antes', l: p.quando === 'dias' ? 'Dias antes' : 'Horas antes', t: 'num', w: 1 })}
-          ${cell(`<small>${esc(quandoTxt(p))}</small>`, 2)}
+          ${field('Receita_Passos', p, { f: 'antes', l: p.quando === 'dias' ? 'Dias antes' : 'Horas antes', t: 'num', w: 2 })}
           ${xbtn('Receita_Passos', p.id, 'passo')}
+          ${cell(`<small>${esc(quandoTxt(p))}</small>`, 2)}
           ${field('Receita_Passos', p, { f: 'duracao_min', l: 'Duração (min)', t: 'num', w: 2 })}
           ${field('Receita_Passos', p, { f: 'equipamento', l: 'Equipamento', list: 'dl-equip', w: 3 })}
-          ${field('Receita_Passos', p, { f: 'conservacao', l: 'Como guardar', w: 6, wide: 1 })}`)).join('') || '<p class="empty">Nenhum passo ainda.</p>'}
-        <div style="margin-top:12px"><button class="btn small light" data-act="novo-passo">+ Passo</button></div>
-      </div>`;
+          ${field('Receita_Passos', p, { f: 'conservacao', l: 'Como guardar', w: 5, wide: 1 })}`, 'compact')).join('') || emptyMsg('Nenhum passo ainda.')}
+        <div class="inset"><button class="btn small ghost" data-act="novo-passo">Adicionar passo</button></div>
+      </section>`;
   }
-  $('#main').innerHTML = head('Receitas', 'O livro de receitas do Gato Véio: fica guardado de um evento para o outro.', '<button class="btn small" data-act="nova-receita">+ Nova receita</button>') + `
+  $('#main').innerHTML = head('Receitas', 'O livro de receitas do Gato Véio. Fica guardado de um evento para o outro.', '<button class="btn" data-act="nova-receita">Nova receita</button>') + `
     <div class="split">
-      <div class="card" style="padding:12px">
-        <input id="busca" placeholder="Buscar receita" value="${esc(prefs.busca)}" style="margin-bottom:8px">
-        <div class="reclist">${recs.filter(x => !q || x.nome.toLowerCase().includes(q)).map(x => `<button class="${x.id === recSel ? 'active' : ''}" data-pick-rec="${esc(x.id)}">${esc(x.nome)}<small>${esc(x.categoria || '—')}${noEvento.has(x.id) ? ' · neste evento' : ''}${receitaIncompleta(x).length ? ' · incompleta' : ''}</small></button>`).join('')}</div>
-      </div>
+      <aside class="sheet side">
+        <input id="busca" type="search" placeholder="Buscar receita" value="${esc(prefs.busca)}">
+        <div class="reclist">${recs.filter(x => !q || x.nome.toLowerCase().includes(q)).map(x => `<button class="${x.id === recSel ? 'active' : ''}" data-pick-rec="${esc(x.id)}">${esc(x.nome)}<small>${esc(x.categoria || 'sem categoria')}${noEvento.has(x.id) ? ' · neste evento' : ''}${receitaIncompleta(x).length ? ' · incompleta' : ''}</small></button>`).join('')}</div>
+      </aside>
       <div>${editor}</div>
     </div>
-    ${datalist('dl-ing', DB.Ingredientes.filter(live).map(g => g.nome).sort())}${datalist('dl-cat', L.categorias)}${datalist('dl-equip', L.equip)}`;
+    ${datalist('dl-ing', DB.Ingredientes.filter(live).map(g => g.nome).sort())}`;
 }
 function compraResumo(g) {
   const fc = num(g.compra_fator);
@@ -588,156 +593,134 @@ function quandoTxt(p) {
 }
 
 function compras() {
-  const base = basePessoas(), cs = of('Compras');
+  const base = basePessoas(), all = of('Compras'), filtro = prefs.compras || 'pendentes';
+  const cs = filtro === 'pendentes' ? all.filter(c => c.status === 'Comprar') : all;
   const ordem = ['Açougue', 'Feira', 'Mercado', 'Empório', 'Atacado', 'Padaria', 'Vinícola', 'Outro'];
   const grupos = new Map(); [...ordem, ...new Set(cs.map(c => c.onde_comprar || 'Outro'))].forEach(o => grupos.set(o, []));
-  cs.sort((a, b) => (a.status === 'Comprar' ? 0 : 1) - (b.status === 'Comprar' ? 0 : 1) || a.item.localeCompare(b.item)).forEach(c => grupos.get(c.onde_comprar || 'Outro').push(c));
-  const pend = cs.filter(c => c.status === 'Comprar').length, total = cs.reduce((s, c) => s + (num(c.custo) || 0), 0);
+  cs.slice().sort((a, b) => (a.status === 'Comprar' ? 0 : 1) - (b.status === 'Comprar' ? 0 : 1) || a.item.localeCompare(b.item)).forEach(c => grupos.get(c.onde_comprar || 'Outro').push(c));
+  const pend = all.filter(c => c.status === 'Comprar').length, total = all.reduce((s, c) => s + (num(c.custo) || 0), 0);
   const { skipped } = shoppingNeeds(base.n || 1);
-  $('#main').innerHTML = head('Compras', 'Lista de mercado gerada das receitas aprovadas + itens avulsos.') + `
-    <div class="card accent">
-      <div class="toolbar">
-        <label class="f">Calcular para<select id="base">${opts([['auto', 'Automático'], ['pagos', `Pagos (${reservas().pagos.length})`], ['capacidade', `Capacidade (${reservas().cap})`], ['outro', 'Outro número']], prefs.base)}</select></label>
-        ${prefs.base === 'outro' ? `<label class="f">Pessoas<input id="baseN" inputmode="numeric" value="${esc(prefs.baseN)}" style="width:90px"></label>` : ''}
-        <button class="btn" data-act="gerar-compras">Gerar / atualizar lista (${base.n} pessoas)</button>
-        <button class="btn light" data-copiar="">Copiar pendentes</button>
-      </div>
-      <p class="mini" style="margin:0">Base atual: ${base.n} pessoas (${esc(base.label)}). Atualizar a lista recalcula as quantidades e mantém o que vocês já marcaram como <i>Já tenho</i> ou <i>Comprado</i>.${skipped.length ? `<br><b>Fora da conta</b> (aprovados sem receita completa): ${esc(skipped.join(', '))}.` : ''}</p>
-      <div class="totals" style="margin-top:10px"><span>Pendentes <b>${pend}</b></span><span>Itens <b>${cs.length}</b></span><span>Gasto registrado <b>${money(total)}</b></span></div>
+  const linha = c => { const comprado = c.status !== 'Comprar';
+    const qtd = [c.quantidade, c.unidade].filter(Boolean).join(' ');
+    return item({ open: `Compras|${c.id}`, cls: comprado ? 'done' : '',
+      lead: `<button class="check ${comprado ? 'on' : ''}" data-tog-compra="${esc(c.id)}" aria-label="${comprado ? 'Voltar para comprar' : 'Marcar comprado'}">${comprado ? '✓' : ''}</button>`,
+      title: esc(c.item) + (c.status === 'Já tenho' ? ' <span class="pill ok">já tenho</span>' : ''),
+      sub: esc(c.observacao || ''),
+      end: `${qtd ? `<span class="qty">${esc(qtd)}</span>` : ''}${num(c.custo) ? `<span class="money">${money(num(c.custo))}</span>` : ''}` }); };
+  $('#main').innerHTML = head('Compras', `${pend} pendente${pend === 1 ? '' : 's'} de ${all.length} · gasto ${money(total)}`,
+      `<button class="btn ghost" data-copiar="">Copiar pendentes</button>`) + `
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="Mostrar"><button class="${filtro === 'pendentes' ? 'active' : ''}" data-pref="compras" data-val="pendentes">Pendentes</button><button class="${filtro === 'todos' ? 'active' : ''}" data-pref="compras" data-val="todos">Todos</button></div>
     </div>
-    <div class="card">
-      ${[...grupos].filter(([, l]) => l.length).map(([g, l]) => `<div class="group-h" style="justify-content:space-between"><span>${esc(g)} (${l.filter(c => c.status === 'Comprar').length} pendente${l.filter(c => c.status === 'Comprar').length === 1 ? '' : 's'})</span>${l.some(c => c.status === 'Comprar') ? `<button class="btn small light" data-copiar="${esc(g)}">Copiar ${esc(g.toLowerCase())}</button>` : ''}</div>` + l.map(c => row(`
-        ${c.origem === 'Gerada' ? cell(`<span class="rowtitle">${esc(c.item)}</span><small>${esc(c.observacao)}</small>`, 4, 1) : field('Compras', c, { f: 'item', l: 'Item avulso', w: 4, wide: 1 })}
-        ${field('Compras', c, { f: 'quantidade', l: 'Qtd', w: 1 })}
-        ${field('Compras', c, { f: 'unidade', l: 'Unidade', w: 1 })}
-        ${field('Compras', c, { f: 'status', l: 'Status', t: 'select', o: L.compra })}
-        ${field('Compras', c, { f: 'custo', l: 'Custo R$', t: 'num', w: 1 })}
-        ${field('Compras', c, { f: 'onde_comprar', l: 'Onde', list: 'dl-onde', w: 2 })}
-        ${xbtn('Compras', c.id, 'item')}`, c.status !== 'Comprar' ? 'off' : '')).join('')).join('') || '<p class="empty">Lista vazia. Gere a partir das receitas ou adicione itens avulsos.</p>'}
-      <form id="f-compra" class="toolbar" style="margin:16px 0 0" autocomplete="off">
-        <label class="f" style="flex:2 1 200px">Item avulso<input name="item" required placeholder="gelo, carvão, guardanapo…"></label>
-        <label class="f" style="flex:0 1 90px">Qtd<input name="qtd"></label>
-        <label class="f" style="flex:1 1 140px">Onde<input name="onde" list="dl-onde" value="Mercado"></label>
-        <button class="btn">Adicionar</button>
-      </form>
-    </div>${datalist('dl-onde', L.onde)}`;
+    ${[...grupos].filter(([, l]) => l.length).map(([g, l]) => section(`${esc(g)} <span class="count-sub">${l.filter(c => c.status === 'Comprar').length} pendente${l.filter(c => c.status === 'Comprar').length === 1 ? '' : 's'}</span>`,
+        l.map(linha).join(''), l.some(c => c.status === 'Comprar') ? `<button class="linkbtn" data-copiar="${esc(g)}">Copiar</button>` : '')).join('')
+      || section('', emptyMsg(filtro === 'pendentes' ? 'Nada pendente. Tudo comprado.' : 'Lista vazia. Gere a partir das receitas ou adicione itens avulsos.'))}
+    <form id="f-compra" class="addbar" autocomplete="off">
+      <label class="f grow">Item avulso<input name="item" required placeholder="Gelo, carvão, guardanapo…"></label>
+      <label class="f narrow">Qtd<input name="qtd"></label>
+      <label class="f">Onde<input name="onde" list="dl-onde" value="Mercado"></label>
+      <button class="btn">Adicionar</button>
+    </form>
+    <details class="more sheet-like"><summary>Gerar a lista pelas receitas</summary>
+      <div class="inline-fields">
+        <label class="f">Calcular para<select id="base">${opts([['auto', 'Automático'], ['pagos', `Pagos (${reservas().pagos.length})`], ['capacidade', `Capacidade (${reservas().cap})`], ['outro', 'Outro número']], prefs.base)}</select></label>
+        ${prefs.base === 'outro' ? `<label class="f narrow">Pessoas<input id="baseN" inputmode="numeric" value="${esc(prefs.baseN)}"></label>` : ''}
+        <button class="btn" data-act="gerar-compras">Gerar ou atualizar (${base.n} pessoas)</button>
+      </div>
+      <p class="mini">Base atual: ${base.n} pessoas (${esc(base.label)}). Atualizar recalcula as quantidades e mantém o que já foi marcado como comprado ou já tenho.${skipped.length ? `<br><b>Fora da conta</b> (aprovados sem receita completa): ${esc(skipped.join(', '))}.` : ''}</p>
+    </details>`;
 }
 
 function bebidas() {
-  const bs = of('Bebidas'), forn = DB.Fornecedores.filter(live).map(f => [f.id, f.nome]);
-  const pratos = of('Cardapio').filter(c => c.status !== 'Descartado');
+  const bs = of('Bebidas');
   const acerto = new Map();
   bs.forEach(b => { const c = bebidaCalc(b), k = byId('Fornecedores', b.fornecedor_id)?.nome || 'Sem fornecedor', a = acerto.get(k) || { consumidas: 0, pagar: 0, devolver: 0, pendente: 0 };
     a.consumidas += c.consumidas || 0; a.pagar += c.pagar || 0; a.pendente += c.pendente; if (b.modalidade !== 'Comprado') a.devolver += num(b.devolvidas) || 0; acerto.set(k, a); });
-  $('#main').innerHTML = head('Bebidas', `Preço livre por rótulo. Taça = 150 ml, ${TACAS} taças por garrafa.`, '<button class="btn small" data-act="nova-bebida">+ Bebida</button>') + `
-    <div class="card accent"><h3>Acerto com fornecedores</h3><p class="mini" style="margin-top:-6px">Preencha garrafas recebidas e, no dia seguinte, as devolvidas (fechadas). Consumidas = recebidas − devolvidas. Vinho consignado só entra no custo depois que a devolução for preenchida (se não voltou nenhuma, coloque 0).</p>
-      <div class="scroll"><table class="t"><tr><th>Fornecedor</th><th class="n">Consumidas</th><th class="n">Devolver</th><th class="n">A pagar</th><th class="n">Aguardando devolução</th></tr>
+  const tot = k => [...acerto.values()].reduce((s, a) => s + a[k], 0);
+  $('#main').innerHTML = head('Bebidas', `Taça de 150 ml, ${TACAS} por garrafa. Toque num rótulo para editar preços e quantidades.`, '<button class="btn" data-act="nova-bebida">Nova bebida</button>') + `
+    ${section('', bs.map(b => { const c = bebidaCalc(b), f = byId('Fornecedores', b.fornecedor_id)?.nome;
+      const status = c.aguardando ? `<span class="pill wait">aguardando devolução</span>` : c.consumidas != null ? `<span class="qty">${c.consumidas} consumida${c.consumidas === 1 ? '' : 's'}</span><span class="money">${money(c.pagar)}</span>` : '<span class="qty">sem quantidade</span>';
+      const precos = [num(b.preco_taca) != null && `taça ${money(num(b.preco_taca))}`, num(b.preco_garrafa) != null && `garrafa ${money(num(b.preco_garrafa))}`, c.custo != null && `custo ${money(c.custo)}`].filter(Boolean).join(' · ');
+      return item({ open: `Bebidas|${b.id}`, title: esc(b.rotulo),
+        sub: [esc([b.tipo, f, b.modalidade].filter(Boolean).join(' · ')), precos, num(b.recebidas) != null ? `${fmtNum(num(b.recebidas))} recebidas${num(b.devolvidas) != null ? `, ${fmtNum(num(b.devolvidas))} devolvidas` : ''}` : ''].filter(Boolean).join('<br>'),
+        end: status }); }).join('') || emptyMsg('Nenhuma bebida ainda.'))}
+    ${section('Acerto com fornecedores', `<p class="mini">No dia seguinte, preencha as garrafas devolvidas (fechadas) de cada rótulo. Vinho consignado só vira custo depois disso. Se não voltou nenhuma, coloque 0.</p>
+      <div class="scroll"><table class="t"><thead><tr><th>Fornecedor</th><th class="n">Consumidas</th><th class="n">Devolver</th><th class="n">A pagar</th><th class="n">Aguardando</th></tr></thead><tbody>
       ${[...acerto].map(([k, a]) => `<tr><td>${esc(k)}</td><td class="n">${a.consumidas}</td><td class="n">${a.devolver}</td><td class="n">${money(a.pagar)}</td><td class="n">${a.pendente ? 'até ' + money(a.pendente) : '—'}</td></tr>`).join('')}
-      <tr class="sum"><td>Total</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.consumidas, 0)}</td><td class="n">${[...acerto.values()].reduce((s, a) => s + a.devolver, 0)}</td><td class="n">${money([...acerto.values()].reduce((s, a) => s + a.pagar, 0))}</td><td class="n">${(t => t ? 'até ' + money(t) : '—')([...acerto.values()].reduce((s, a) => s + a.pendente, 0))}</td></tr></table></div></div>
-    <div class="card">${bs.map(b => { const c = bebidaCalc(b), harm = pratos.filter(p => p.bebida_id === b.id).map(p => receita(p.receita_id)?.nome).filter(Boolean);
-      return row(`${field('Bebidas', b, { f: 'rotulo', l: 'Rótulo', w: 4, wide: 1 })}
-        ${field('Bebidas', b, { f: 'fornecedor_id', l: 'Fornecedor', t: 'select', o: forn, blank: '—', w: 3 })}
-        ${field('Bebidas', b, { f: 'tipo', l: 'Tipo', list: 'dl-btipo', w: 2 })}
-        ${field('Bebidas', b, { f: 'modalidade', l: 'Modalidade', t: 'select', o: L.modalidade, w: 2 })}
-        ${xbtn('Bebidas', b.id, 'bebida')}
-        ${field('Bebidas', b, { f: 'custo_garrafa', l: 'Custo garrafa', t: 'num' })}
-        ${field('Bebidas', b, { f: 'preco_garrafa', l: 'Preço garrafa', t: 'num' })}
-        ${field('Bebidas', b, { f: 'preco_taca', l: 'Preço taça', t: 'num' })}
-        ${field('Bebidas', b, { f: 'recebidas', l: 'Recebidas', t: 'num', w: 1 })}
-        ${field('Bebidas', b, { f: 'devolvidas', l: 'Devolvidas', t: 'num', w: 1 })}
-        ${cell(c.aguardando ? `<b>aguardando devolução</b><small>em consignação: até ${money(c.pendente)}</small>` : `<b>${c.consumidas ?? '—'}</b> consumidas<small>a pagar ${money(c.pagar)}</small>`, 3)}
-        ${cell(`<small>custo/taça ${money(c.custoTaca)} · margem garrafa ${money(c.margemGarrafa)} · margem taça ${money(c.margemTaca)}${harm.length ? ` · com ${esc(harm.join(', '))}` : ''}</small>`, 6, 1)}
-        ${field('Bebidas', b, { f: 'observacao', l: 'Observação', w: 6, wide: 1 })}`); }).join('') || '<p class="empty">Nenhuma bebida ainda.</p>'}</div>
-    ${datalist('dl-btipo', L.bebidaTipo)}`;
+      <tr class="sum"><td>Total</td><td class="n">${tot('consumidas')}</td><td class="n">${tot('devolver')}</td><td class="n">${money(tot('pagar'))}</td><td class="n">${tot('pendente') ? 'até ' + money(tot('pendente')) : '—'}</td></tr></tbody></table></div>`)}`;
 }
 
 function telaEvento() {
   const e = ev(), list = events(), sug = sugestaoNovoEvento();
   const fc = evId ? fechamento() : null;
-  $('#main').innerHTML = head('Evento', 'Dados, custos extras, fechamento e novos eventos.') + `
-    <div class="grid">
-      ${evId ? `<div class="card accent full">
-        <div class="head" style="margin-bottom:6px"><h3 style="margin:0">Dados do evento</h3>
-          ${list.length > 1 ? `<label class="f">Trocar de evento<select id="ev-pick">${list.map(x => `<option value="${esc(x.id)}" ${x.id === evId ? 'selected' : ''}>${esc(fmt(x.data))}/${esc((x.data || '').slice(2, 4))} · ${esc(x.nome)}</option>`).join('')}</select></label>` : ''}</div>
-        <div class="row" style="padding-top:0;border:0">
-          ${field('Eventos', e, { f: 'nome', l: 'Nome', w: 4, wide: 1 })}
-          ${field('Eventos', e, { f: 'tema', l: 'Tema (comida)', w: 4 })}
-          ${field('Eventos', e, { f: 'formato', l: 'Formato', list: 'dl-formato', w: 4 })}
-          ${field('Eventos', e, { f: 'data', l: 'Data', t: 'date', w: 3 })}
-          ${field('Eventos', e, { f: 'hora', l: 'Início', t: 'time', w: 2 })}
-          ${field('Eventos', e, { f: 'capacidade', l: 'Lugares', t: 'num', w: 2 })}
-          ${field('Eventos', e, { f: 'valor_ingresso', l: 'Ingresso R$', t: 'num', w: 2 })}
-          ${field('Eventos', e, { f: 'prazo_pagamento', l: 'Prazo de pagamento', t: 'date', w: 3 })}
-          ${field('Eventos', e, { f: 'status', l: 'Status', t: 'select', o: L.evento, w: 3 })}
-          ${field('Eventos', e, { f: 'notas', l: 'Notas e combinados', t: 'textarea', w: 9, wide: 1 })}
-        </div>
-      </div>
-      <div class="card">
-        <h3>Custos extras</h3><p class="mini" style="margin-top:-6px">Ajudante, fogueira, gelo… o que for definido na Ideia.</p>
-        ${of('Custos').map(c => row(`${field('Custos', c, { f: 'descricao', l: 'Descrição', w: 4, wide: 1 })}${field('Custos', c, { f: 'categoria', l: 'Categoria', list: 'dl-ccat', w: 3 })}${field('Custos', c, { f: 'valor', l: 'Valor R$', t: 'num', w: 2 })}${field('Custos', c, { f: 'pago', l: 'Pago?', t: 'select', o: ['não', 'sim'], w: 2 })}${xbtn('Custos', c.id, 'custo')}`)).join('') || '<p class="empty">Nenhum custo extra.</p>'}
-        <div style="margin-top:12px"><button class="btn small light" data-act="novo-custo">+ Custo</button></div>
-      </div>
-      <div class="card">
-        <h3>Fechamento</h3>
-        <label class="f" style="margin-bottom:10px">Total vendido em bebidas no dia (soma das comandas) R$<input data-e="Eventos|${esc(e.id)}|vendas_bebidas" inputmode="decimal" value="${esc(e.vendas_bebidas)}"></label>
-        <table class="t">
+  const dl = (k, v) => `<div><dt>${k}</dt><dd>${v || '—'}</dd></div>`;
+  $('#main').innerHTML = head('Evento', 'Dados, custos extras e fechamento.', list.length > 1 ? `<label class="f">Trocar de evento<select id="ev-pick">${list.map(x => `<option value="${esc(x.id)}" ${x.id === evId ? 'selected' : ''}>${esc(fmt(x.data))}/${esc((x.data || '').slice(2, 4))} · ${esc(x.nome)}</option>`).join('')}</select></label>` : '') + `
+    ${evId ? `<div class="layout-2">
+      ${section('Dados do evento', `<dl class="facts">
+          ${dl('Data', e.data ? `${esc(fmtLong(e.data))}/${e.data.slice(0, 4)} às ${esc(e.hora || '—')}` : '')}
+          ${dl('Status', esc(e.status))}${dl('Tema', esc(e.tema))}${dl('Formato', esc(e.formato))}
+          ${dl('Lugares', esc(e.capacidade))}${dl('Ingresso', num(e.valor_ingresso) != null ? money(num(e.valor_ingresso)) : '')}
+          ${dl('Prazo de pagamento', e.prazo_pagamento ? esc(fmtLong(e.prazo_pagamento)) : '')}
+        </dl>${e.notas ? `<p class="notes">${esc(e.notas)}</p>` : ''}`, `<button class="btn small ghost" data-open="Eventos|${esc(e.id)}">Editar</button>`)}
+      ${section('Fechamento', `
+        <label class="f">Total vendido em bebidas no dia (soma das comandas)<input data-e="Eventos|${esc(e.id)}|vendas_bebidas" inputmode="decimal" value="${esc(e.vendas_bebidas)}" placeholder="R$ 0,00"></label>
+        <table class="t ledger"><tbody>
           <tr><td>Ingressos pagos</td><td class="n">${money(fc.ingressos)}</td></tr>
           <tr><td>Bebidas vendidas</td><td class="n">${money(fc.bebidasVendidas)}</td></tr>
-          <tr><td>Compras (custo lançado)</td><td class="n">− ${money(fc.compras)}</td></tr>
-          <tr><td>Custos extras</td><td class="n">− ${money(fc.custos)}</td></tr>
-          <tr><td>Acerto com vinícolas${fc.vinicolasPendente ? `<br><span class="mini">consignado aguardando devolução: até ${money(fc.vinicolasPendente)} (fora do resultado)</span>` : ''}</td><td class="n">− ${money(fc.vinicolas)}</td></tr>
+          <tr><td>Compras</td><td class="n neg">− ${money(fc.compras)}</td></tr>
+          <tr><td>Custos extras</td><td class="n neg">− ${money(fc.custos)}</td></tr>
+          <tr><td>Acerto com vinícolas${fc.vinicolasPendente ? `<span class="mini block">consignado aguardando devolução: até ${money(fc.vinicolasPendente)}, fora do resultado</span>` : ''}</td><td class="n neg">− ${money(fc.vinicolas)}</td></tr>
           <tr class="sum"><td>Resultado</td><td class="n" style="color:${fc.resultado < 0 ? 'var(--red)' : 'var(--green)'}">${money(fc.resultado)}</td></tr>
-        </table>
-      </div>` : ''}
-      <div class="card ${evId ? '' : 'accent'}">
-        <h3>Novo evento</h3>
-        <p class="mini" style="margin-top:-6px">Cria as tarefas a partir do modelo (Cadastros → Modelo de tarefas). Datas sugeridas: último sábado do mês e prazo de pagamento no dia 15. Prazos que caem no fim de semana vão para a sexta anterior; depois é só revisar em Tarefas.</p>
-        <form id="f-evento" class="form-grid">
-          <label class="f wide">Nome<input name="nome" required placeholder="Gato Véio · Novembro"></label>
-          <label class="f">Tema (comida)<input name="tema"></label>
-          <label class="f">Formato<input name="formato" list="dl-formato"></label>
-          <label class="f">Data<input name="data" type="date" required value="${sug.data}"></label>
-          <label class="f">Início<input name="hora" type="time" value="19:00"></label>
-          <label class="f">Lugares<input name="capacidade" inputmode="numeric" value="24"></label>
-          <label class="f">Ingresso R$<input name="valor" inputmode="decimal" value="${esc(e.valor_ingresso || '')}"></label>
-          <label class="f">Prazo de pagamento<input name="prazo" type="date" value="${sug.prazo}"></label>
-          <div class="wide"><button class="btn">Criar evento</button></div>
-        </form>
-      </div>
-      <div class="card">
-        <h3>Conexão</h3>
-        ${MODE === 'n8n' ? `<p>Dados na planilha Google via n8n. Vocês dois veem e alteram as mesmas informações.</p>
-          <div class="toolbar"><button class="btn small light" data-act="recarregar">Buscar últimas alterações</button><button class="btn small ghost" data-act="sair">Sair</button></div>`
-        : `<div class="notice warn">Modo de teste: dados de exemplo, salvos só neste navegador. Para usar de verdade, coloque o endereço do n8n no <b>config.js</b> (veja o README).</div>
-          <button class="btn small danger" data-act="reset">Voltar aos dados iniciais</button>`}
-        <div class="toolbar" style="margin-top:10px"><button class="btn small ghost" data-act="exportar">Baixar cópia dos dados (.json)</button></div>
-      </div>
-    </div>${datalist('dl-formato', L.formato)}${datalist('dl-ccat', L.custoCat)}`;
+        </tbody></table>`)}
+      ${section(`Custos extras <span class="count-sub">${money(fc.custos)}</span>`, (of('Custos').map(c => item({ open: `Custos|${c.id}`, title: esc(c.descricao || 'Sem descrição'), sub: esc(c.categoria || ''),
+          end: `<span class="money">${money(num(c.valor))}</span>${pill(c.pago === 'sim' ? 'pago' : 'a pagar', c.pago === 'sim' ? 'ok' : 'wait')}` })).join('') || emptyMsg('Nenhum custo extra.')), '<button class="btn small ghost" data-act="novo-custo">Adicionar custo</button>')}
+      ${section('Conexão', MODE === 'n8n' ? `<p class="mini">Os dados ficam na planilha Google, via n8n. Vocês dois veem e alteram as mesmas informações.</p>
+          <div class="btnrow"><button class="btn small ghost" data-act="recarregar">Buscar últimas alterações</button><button class="btn small ghost" data-act="exportar">Baixar cópia (.json)</button><button class="btn small ghost" data-act="sair">Sair</button></div>`
+        : `<div class="notice warn">Modo de teste: dados de exemplo, salvos só neste navegador. Para usar de verdade, coloque o endereço do n8n no config.js.</div>
+          <div class="btnrow"><button class="btn small ghost" data-act="exportar">Baixar cópia (.json)</button><button class="btn small danger" data-act="reset">Voltar aos dados iniciais</button></div>`)}
+    </div>` : ''}
+    <details class="more sheet-like" ${evId ? '' : 'open'}><summary>Criar novo evento</summary>
+      <p class="mini">As tarefas vêm do modelo (Cadastros → Modelo de tarefas). Sugestão: último sábado do mês, pagamento até o dia 15. Prazos no fim de semana vão para a sexta anterior.</p>
+      <form id="f-evento" class="form-grid">
+        <label class="f wide">Nome<input name="nome" required placeholder="Gato Véio de novembro"></label>
+        <label class="f">Tema (comida)<input name="tema"></label>
+        <label class="f">Formato<input name="formato" list="dl-formato"></label>
+        <label class="f">Data<input name="data" type="date" required value="${sug.data}"></label>
+        <label class="f">Início<input name="hora" type="time" value="19:00"></label>
+        <label class="f">Lugares<input name="capacidade" inputmode="numeric" value="24"></label>
+        <label class="f">Ingresso R$<input name="valor" inputmode="decimal" value="${esc(e.valor_ingresso || '')}"></label>
+        <label class="f">Prazo de pagamento<input name="prazo" type="date" value="${sug.prazo}"></label>
+        <div class="wide"><button class="btn">Criar evento</button></div>
+      </form>
+    </details>`;
 }
 
 function cadastros() {
   const sub = prefs.cad, tabs = [['pessoas', 'Pessoas'], ['fornecedores', 'Fornecedores'], ['ingredientes', 'Ingredientes'], ['modelo', 'Modelo de tarefas']];
-  let body = '', addAct = '';
+  let body = '', addAct = '', note = '';
   if (sub === 'pessoas') {
-    const ps = DB.Pessoas.filter(live).sort((a, b) => a.nome.localeCompare(b.nome));
     const vezes = id => DB.Reservas.filter(r => live(r) && r.pessoa_id === id && r.status === 'Pago').length;
-    body = ps.map(p => row(`${field('Pessoas', p, { f: 'nome', l: 'Nome', w: 3, wide: 1 })}${field('Pessoas', p, { f: 'telefone', l: 'Telefone' })}${field('Pessoas', p, { f: 'instagram', l: 'Instagram' })}${field('Pessoas', p, { f: 'restricao', l: 'Restrição alimentar', w: 2 })}${cell(`<small>${vezes(p.id)} evento(s) pago(s)</small>`, 2)}${xbtn('Pessoas', p.id, 'pessoa')}${field('Pessoas', p, { f: 'observacoes', l: 'Observações', w: 11, wide: 1 })}`)).join('');
+    body = DB.Pessoas.filter(live).sort((a, b) => a.nome.localeCompare(b.nome)).map(p => item({ open: `Pessoas|${p.id}`, title: esc(p.nome),
+      sub: [esc([p.telefone, p.instagram].filter(Boolean).join(' · ') || 'sem contato'), p.restricao && `<span class="warn-txt">${esc(p.restricao)}</span>`].filter(Boolean).join(' · '),
+      end: `<span class="qty">${vezes(p.id)} evento${vezes(p.id) === 1 ? '' : 's'}</span>` })).join('');
     addAct = 'nova-pessoa';
   } else if (sub === 'fornecedores') {
-    body = DB.Fornecedores.filter(live).map(f => row(`${field('Fornecedores', f, { f: 'nome', l: 'Nome', w: 3, wide: 1 })}${field('Fornecedores', f, { f: 'tipo', l: 'Tipo', list: 'dl-ftipo' })}${field('Fornecedores', f, { f: 'cidade', l: 'Cidade' })}${field('Fornecedores', f, { f: 'contato', l: 'Contato', w: 3 })}${xbtn('Fornecedores', f.id, 'fornecedor')}${field('Fornecedores', f, { f: 'observacoes', l: 'Observações', w: 11, wide: 1 })}`)).join('') + datalist('dl-ftipo', L.fornTipo);
+    body = DB.Fornecedores.filter(live).map(f => item({ open: `Fornecedores|${f.id}`, title: esc(f.nome), sub: esc([f.tipo, f.cidade, f.contato].filter(Boolean).join(' · ')), end: '' })).join('');
     addAct = 'novo-fornecedor';
   } else if (sub === 'ingredientes') {
-    body = `<p class="mini">A conversão diz quanto comprar: “1 colher = 0,25 cebola”. Sem conversão, a lista mostra na unidade da receita. Arredondar = comprar inteiro (cebola sim, carne não).</p>` +
-      DB.Ingredientes.filter(live).sort((a, b) => a.nome.localeCompare(b.nome)).map(g => row(`${field('Ingredientes', g, { f: 'nome', l: 'Nome', w: 3, wide: 1 })}${field('Ingredientes', g, { f: 'unidade', l: 'Unidade na receita', t: 'select', o: L.unidades, blank: '—' })}${field('Ingredientes', g, { f: 'compra_fator', l: '1 unid. = quanto', t: 'num', w: 1 })}${field('Ingredientes', g, { f: 'compra_unidade', l: 'Unidade de compra', ph: 'cebola, maço, pote' })}${field('Ingredientes', g, { f: 'arredondar', l: 'Arredondar', t: 'select', o: ['não', 'sim'], w: 1 })}${field('Ingredientes', g, { f: 'onde_comprar', l: 'Onde comprar', list: 'dl-onde' })}${xbtn('Ingredientes', g.id, 'ingrediente')}`)).join('') + datalist('dl-onde', L.onde);
+    note = 'A conversão diz quanto comprar: “1 colher = 0,25 cebola”. Arredondar = comprar inteiro (cebola sim, carne não).';
+    body = DB.Ingredientes.filter(live).sort((a, b) => a.nome.localeCompare(b.nome)).map(g => item({ open: `Ingredientes|${g.id}`, title: esc(g.nome), sub: esc(compraResumo(g)), end: '' })).join('');
     addAct = 'novo-ingrediente';
   } else {
-    body = `<p class="mini">Referência: <b>D</b> = dias em relação ao evento (−30 = 30 dias antes), <b>P</b> = dias em relação ao prazo de pagamento, <b>H</b> = horas em relação ao início, no dia do evento (−7 = 7 horas antes). Vale para os próximos eventos; não muda os que já existem.</p>` +
-      DB.Modelo_Tarefas.filter(live).map(m => row(`${field('Modelo_Tarefas', m, { f: 'fase', l: 'Fase', list: 'dl-fases' })}${field('Modelo_Tarefas', m, { f: 'tarefa', l: 'Tarefa', w: 5, wide: 1 })}${field('Modelo_Tarefas', m, { f: 'ref', l: 'Ref.', t: 'select', o: [['D', 'D · evento'], ['P', 'P · pagamento'], ['H', 'H · horas no dia']], w: 2 })}${field('Modelo_Tarefas', m, { f: 'desloc', l: 'Deslocamento', t: 'num', w: 2 })}${xbtn('Modelo_Tarefas', m.id, 'tarefa do modelo')}`)).join('') + datalist('dl-fases', L.fases);
+    note = 'D = dias em relação ao evento (−30 = 30 dias antes) · P = dias em relação ao prazo de pagamento · H = horas em relação ao início, no dia. Vale para os próximos eventos.';
+    const refTxt = m => `${m.ref === 'H' ? 'H' : m.ref === 'P' ? 'P' : 'D'} ${num(m.desloc) > 0 ? '+' : ''}${esc(m.desloc || '0')}`;
+    body = DB.Modelo_Tarefas.filter(live).map(m => item({ open: `Modelo_Tarefas|${m.id}`, title: esc(m.tarefa), sub: esc(m.fase || 'sem fase'), end: `<span class="qty">${refTxt(m)}</span>` })).join('');
     addAct = 'novo-modelo';
   }
-  $('#main').innerHTML = head('Cadastros', 'O que vale para todos os eventos.') + `
-    <div class="subtabs">${tabs.map(([k, l]) => `<button class="${sub === k ? 'active' : ''}" data-pref="cad" data-val="${k}">${l}</button>`).join('')}</div>
-    <div class="card">${body || '<p class="empty">Nada cadastrado.</p>'}<div style="margin-top:12px"><button class="btn small light" data-act="${addAct}">+ Adicionar</button></div></div>`;
+  $('#main').innerHTML = head('Cadastros', 'O que vale para todos os eventos.', `<button class="btn" data-act="${addAct}">Adicionar</button>`) + `
+    <div class="toolbar"><div class="seg" role="group">${tabs.map(([k, l]) => `<button class="${sub === k ? 'active' : ''}" data-pref="cad" data-val="${k}">${l}</button>`).join('')}</div></div>
+    ${note ? `<p class="mini lead">${note}</p>` : ''}
+    ${section('', body || emptyMsg('Nada cadastrado ainda.'))}`;
 }
 
 /* ---------- diálogos ---------- */
@@ -745,8 +728,89 @@ function openDialog(html, onOk, onDel) {
   const dlg = $('#dlg'), f = $('#dlg-form');
   f.innerHTML = html + `<div class="dlg-actions">${onDel ? '<button type="button" class="btn small danger left" id="dlg-del">Excluir</button>' : ''}<button class="btn ghost" value="cancel" formnovalidate>Cancelar</button><button class="btn" value="ok">Salvar</button></div>`;
   dlg.returnValue = ''; dlg.showModal();
+  f.querySelector('input:not([type=hidden]),select,textarea')?.focus();
   if (onDel) $('#dlg-del').onclick = () => { if (confirm('Excluir?')) { dlg.close(); onDel(); render(); } };
   dlg.onclose = () => { if (dlg.returnValue === 'ok') { onOk(new FormData(f)); render(); } };
+}
+function inputFor(c, v) {
+  const n = `name="${c.f}"`;
+  if (c.t === 'select') return `<select ${n}>${opts(typeof c.o === 'function' ? c.o() : c.o, v, c.blank)}</select>`;
+  if (c.t === 'textarea') return `<textarea ${n} placeholder="${esc(c.ph || '')}">${esc(v)}</textarea>`;
+  return `<input ${n} type="${c.t === 'num' ? 'text' : c.t || 'text'}" ${c.t === 'num' ? 'inputmode="decimal"' : ''} value="${esc(v)}" ${c.list ? `list="${c.list}"` : ''} placeholder="${esc(c.ph || '')}" ${c.req ? 'required' : ''}>`;
+}
+// Formulários de edição: cada aba tem seus campos; o diálogo salva tudo de uma vez.
+const FORMS = {
+  Compras: { t: 'item de compra', f: [
+    { f: 'item', l: 'Item', wide: 1, req: 1 }, { f: 'quantidade', l: 'Quantidade' }, { f: 'unidade', l: 'Unidade' },
+    { f: 'status', l: 'Status', t: 'select', o: L.compra }, { f: 'custo', l: 'Custo R$', t: 'num' },
+    { f: 'onde_comprar', l: 'Onde comprar', list: 'dl-onde' }, { f: 'observacao', l: 'Observação', t: 'textarea', wide: 1 }] },
+  Cardapio: { t: 'prato', f: [
+    { f: 'ordem', l: 'Ordem de serviço', t: 'num' }, { f: 'porcoes_pessoa', l: 'Porções por pessoa', t: 'num' },
+    { f: 'status', l: 'Status', t: 'select', o: L.prato }, { f: 'bebida_id', l: 'Harmonização', t: 'select', o: () => of('Bebidas').map(b => [b.id, b.rotulo]), blank: '—' },
+    { f: 'teste', l: 'Teste e anotações', t: 'textarea', wide: 1, ph: 'Data do teste, resultado, o que ajustar' }] },
+  Bebidas: { t: 'bebida', f: [
+    { f: 'rotulo', l: 'Rótulo', wide: 1, req: 1 }, { f: 'fornecedor_id', l: 'Fornecedor', t: 'select', o: () => DB.Fornecedores.filter(live).map(f => [f.id, f.nome]), blank: '—' },
+    { f: 'tipo', l: 'Tipo', list: 'dl-btipo' }, { f: 'modalidade', l: 'Modalidade', t: 'select', o: L.modalidade },
+    { f: 'custo_garrafa', l: 'Custo da garrafa R$', t: 'num' }, { f: 'preco_garrafa', l: 'Preço da garrafa R$', t: 'num' }, { f: 'preco_taca', l: 'Preço da taça R$', t: 'num' },
+    { f: 'recebidas', l: 'Garrafas recebidas', t: 'num' }, { f: 'devolvidas', l: 'Garrafas devolvidas', t: 'num', ph: 'preencher no fim' },
+    { f: 'observacao', l: 'Observação', t: 'textarea', wide: 1 }] },
+  Custos: { t: 'custo extra', f: [
+    { f: 'descricao', l: 'Descrição', wide: 1, req: 1 }, { f: 'categoria', l: 'Categoria', list: 'dl-ccat' },
+    { f: 'valor', l: 'Valor R$', t: 'num' }, { f: 'pago', l: 'Já foi pago?', t: 'select', o: [['não', 'Não'], ['sim', 'Sim']] }] },
+  Eventos: { t: 'evento', f: [
+    { f: 'nome', l: 'Nome', wide: 1, req: 1 }, { f: 'tema', l: 'Tema (comida)' }, { f: 'formato', l: 'Formato', list: 'dl-formato' },
+    { f: 'data', l: 'Data', t: 'date' }, { f: 'hora', l: 'Início', t: 'time' }, { f: 'capacidade', l: 'Lugares', t: 'num' },
+    { f: 'valor_ingresso', l: 'Ingresso R$', t: 'num' }, { f: 'prazo_pagamento', l: 'Prazo de pagamento', t: 'date' },
+    { f: 'status', l: 'Status', t: 'select', o: L.evento }, { f: 'notas', l: 'Notas e combinados', t: 'textarea', wide: 1 }] },
+  Pessoas: { t: 'pessoa', f: [
+    { f: 'nome', l: 'Nome', wide: 1, req: 1 }, { f: 'telefone', l: 'Telefone' }, { f: 'instagram', l: 'Instagram' },
+    { f: 'restricao', l: 'Restrição alimentar', wide: 1 }, { f: 'observacoes', l: 'Observações', t: 'textarea', wide: 1 }] },
+  Fornecedores: { t: 'fornecedor', f: [
+    { f: 'nome', l: 'Nome', wide: 1, req: 1 }, { f: 'tipo', l: 'Tipo', list: 'dl-ftipo' }, { f: 'cidade', l: 'Cidade' },
+    { f: 'contato', l: 'Contato', wide: 1 }, { f: 'observacoes', l: 'Observações', t: 'textarea', wide: 1 }] },
+  Ingredientes: { t: 'ingrediente', hint: 'Ex.: cebola roxa na receita em colher; 1 cebola dá 4 colheres → 1 colher = 0,25 cebola.', f: [
+    { f: 'nome', l: 'Nome', wide: 1, req: 1 }, { f: 'unidade', l: 'Unidade na receita', t: 'select', o: L.unidades, blank: '—' },
+    { f: 'onde_comprar', l: 'Onde comprar', list: 'dl-onde' }, { f: 'compra_fator', l: '1 unidade da receita =', t: 'num', ph: '0,25' },
+    { f: 'compra_unidade', l: '… desta unidade de compra', ph: 'cebola, maço, pote' }, { f: 'arredondar', l: 'Comprar inteiro?', t: 'select', o: [['não', 'Não'], ['sim', 'Sim, arredondar para cima']] }] },
+  Modelo_Tarefas: { t: 'tarefa do modelo', f: [
+    { f: 'tarefa', l: 'Tarefa', wide: 1, req: 1 }, { f: 'fase', l: 'Fase', list: 'dl-fases' },
+    { f: 'ref', l: 'Referência', t: 'select', o: [['D', 'Dias em relação ao evento'], ['P', 'Dias em relação ao pagamento'], ['H', 'Horas no dia do evento']] },
+    { f: 'desloc', l: 'Deslocamento', t: 'num', ph: '-7' }, { f: 'nota', l: 'Nota', t: 'textarea', wide: 1 }] },
+};
+function recordDialog(tab, rec, isNew) {
+  const F = FORMS[tab];
+  openDialog(`<h3>${isNew ? 'Novo' : 'Editar'} ${esc(F.t)}</h3>${F.hint ? `<p class="mini">${esc(F.hint)}</p>` : ''}
+    <div class="form-grid">${F.f.map(c => `<label class="f ${c.wide ? 'wide' : ''}">${esc(c.l)}${inputFor(c, rec[c.f] ?? '')}</label>`).join('')}</div>`,
+    d => {
+      const patch = {};
+      F.f.forEach(c => { let v = (d.get(c.f) ?? '').toString(); if (c.t !== 'textarea') v = v.trim();
+        if (DATE_FIELDS.includes(c.f)) v = normDate(v); if (c.f === 'hora') v = normTime(v); patch[c.f] = v; });
+      const req = F.f.find(c => c.req); if (req && !patch[req.f]) return toast('Preencha ' + req.l.toLowerCase());
+      save(tab, [{ ...rec, ...patch }]);
+    },
+    isNew ? null : () => save(tab, [{ ...rec, excluido: 'sim' }]));
+}
+function reservaDialog(x) {
+  const p = pessoa(x.pessoa_id);
+  openDialog(`<h3>${esc(p.nome)}</h3>
+    <div class="form-grid">
+      <label class="f">Status<select name="status">${opts(L.reserva, x.status)}</select></label>
+      <label class="f">Valor pago R$<input name="valor_pago" inputmode="decimal" value="${esc(x.valor_pago)}" placeholder="${esc(fmtNum(num(ev().valor_ingresso)))}"></label>
+      <label class="f">Entrou na lista em<input name="entrada" type="date" value="${esc(x.entrada)}"></label>
+      <label class="f">Pagou em<input name="pagamento" type="date" value="${esc(x.pagamento)}"></label>
+      <label class="f">Telefone<input name="telefone" value="${esc(p.telefone || '')}"></label>
+      <label class="f">Instagram<input name="instagram" value="${esc(p.instagram || '')}"></label>
+      <label class="f wide">Restrição alimentar<input name="restricao" value="${esc(p.restricao || '')}"></label>
+      <label class="f wide">Observação da reserva<textarea name="observacao">${esc(x.observacao)}</textarea></label>
+    </div>`,
+    d => {
+      const status = d.get('status');
+      save('Reservas', [{ ...x, status, valor_pago: d.get('valor_pago').trim(), entrada: normDate(d.get('entrada')),
+        pagamento: normDate(d.get('pagamento')) || (status === 'Pago' ? today() : ''), observacao: d.get('observacao') }]);
+      if (p.id) { const np = { ...p, telefone: d.get('telefone').trim(), instagram: d.get('instagram').trim(), restricao: d.get('restricao').trim() };
+        if (['telefone', 'instagram', 'restricao'].some(k => (p[k] || '') !== np[k])) save('Pessoas', [np], true); }
+    },
+    () => save('Reservas', [{ ...x, excluido: 'sim' }]));
 }
 function taskDialog(t) {
   const isNew = !t;
@@ -754,30 +818,24 @@ function taskDialog(t) {
   openDialog(`<h3>${isNew ? 'Nova tarefa' : 'Editar tarefa'}</h3>
     <div class="form-grid">
       <label class="f wide">Tarefa<input name="tarefa" required value="${esc(t.tarefa)}"></label>
-      <label class="f">Fase<input name="fase" list="dl-fases2" value="${esc(t.fase)}"></label>
-      <label class="f">Status<select name="status">${opts(L.tarefa, t.status)}</select></label>
       <label class="f">Data<input name="data" type="date" value="${esc(t.data)}"></label>
       <label class="f">Horário<input name="hora" type="time" value="${esc(t.hora)}"></label>
+      <label class="f">Fase<input name="fase" list="dl-fases" value="${esc(t.fase)}"></label>
+      <label class="f">Status<select name="status">${opts(L.tarefa, t.status)}</select></label>
       <label class="f wide">Nota<textarea name="nota">${esc(t.nota)}</textarea></label>
-    </div>${datalist('dl-fases2', L.fases)}
-    ${t.origem === 'Produção' ? '<p class="mini">Tarefa do plano de produção: se gerar o plano de novo, o texto e o horário voltam ao que está na receita.</p>' : ''}`,
+    </div>
+    ${t.origem === 'Produção' ? '<p class="mini">Tarefa do plano de produção: se o plano for gerado de novo, o texto e o horário voltam ao que está na receita.</p>' : ''}`,
     d => { const tarefa = d.get('tarefa').trim(); if (!tarefa) return;
       save('Tarefas', [{ ...t, tarefa, fase: d.get('fase').trim(), status: d.get('status'), data: normDate(d.get('data')), hora: normTime(d.get('hora')), nota: d.get('nota') }]); },
     isNew ? null : () => save('Tarefas', [{ ...t, excluido: 'sim' }]));
 }
-function ingDialog(g) {
-  openDialog(`<h3>${esc(g.nome)}: compra</h3>
-    <p class="mini">Ex.: cebola roxa na receita em colher; 1 cebola dá 4 colheres → 1 colher = 0,25 cebola.</p>
-    <div class="form-grid">
-      <label class="f">Unidade na receita<select name="unidade">${opts(L.unidades, g.unidade, '—')}</select></label>
-      <label class="f">Onde comprar<input name="onde" list="dl-onde2" value="${esc(g.onde_comprar)}"></label>
-      <label class="f">1 unidade da receita = <input name="fator" inputmode="decimal" value="${esc(g.compra_fator)}" placeholder="0,25"></label>
-      <label class="f">… desta unidade de compra<input name="cu" value="${esc(g.compra_unidade)}" placeholder="cebola, maço, pote, g"></label>
-      <label class="chk wide"><input type="checkbox" name="arr" ${g.arredondar === 'sim' ? 'checked' : ''}> arredondar para cima (comprar inteiro)</label>
-    </div>${datalist('dl-onde2', L.onde)}`,
-    d => save('Ingredientes', [{ ...g, unidade: d.get('unidade'), onde_comprar: d.get('onde').trim(), compra_fator: d.get('fator').trim(), compra_unidade: d.get('cu').trim(), arredondar: d.get('arr') ? 'sim' : 'não' }]));
+function openRecord(key) {
+  const [tab, id] = key.split('|'), rec = byId(tab, id); if (!rec) return;
+  if (tab === 'Reservas') return reservaDialog(rec);
+  if (FORMS[tab]) return recordDialog(tab, rec);
 }
-
+const staticLists = () => [datalist('dl-onde', L.onde), datalist('dl-btipo', L.bebidaTipo), datalist('dl-ccat', L.custoCat), datalist('dl-ftipo', L.fornTipo),
+  datalist('dl-fases', L.fases), datalist('dl-formato', L.formato), datalist('dl-cat', L.categorias), datalist('dl-equip', L.equip)].join('');
 
 /* ---------- copiar lista para o app Lembretes ---------- */
 function linhaCompra(c) {
@@ -847,12 +905,12 @@ const ACTIONS = {
     save('Receitas', [r], true); recSel = r.id; page = 'receitas'; render(); const el = document.querySelector(`[data-e="Receitas|${r.id}|nome"]`); el?.focus(); el?.select(); },
   'novo-passo': () => { const ps = passosDe(recSel); save('Receita_Passos', [{ id: uid('rp'), receita_id: recSel, ordem: ps.length + 1, passo: '', quando: 'horas', antes: '', duracao_min: '', equipamento: '', conservacao: '', excluido: '' }], true); render();
     const last = passosDe(recSel).slice(-1)[0]; document.querySelector(`[data-e="Receita_Passos|${last.id}|passo"]`)?.focus(); },
-  'nova-bebida': () => { save('Bebidas', [{ id: uid(evId + '_b'), evento_id: evId, rotulo: 'Novo rótulo', modalidade: 'Consignado', excluido: '' }], true); render(); },
-  'novo-custo': () => { save('Custos', [{ id: uid(evId + '_x'), evento_id: evId, descricao: '', categoria: '', valor: '', pago: 'não', excluido: '' }], true); render(); },
-  'nova-pessoa': () => { save('Pessoas', [{ id: uid('p'), nome: 'Nova pessoa', excluido: '' }], true); render(); },
-  'novo-fornecedor': () => { save('Fornecedores', [{ id: uid('f'), nome: 'Novo fornecedor', tipo: 'Vinícola', excluido: '' }], true); render(); },
-  'novo-ingrediente': () => { save('Ingredientes', [{ id: uid('i'), nome: 'Novo ingrediente', unidade: 'colher', arredondar: 'não', onde_comprar: 'Mercado', excluido: '' }], true); render(); },
-  'novo-modelo': () => { save('Modelo_Tarefas', [{ id: uid('m'), fase: '', tarefa: 'Nova tarefa', ref: 'D', desloc: '-7', nota: '', excluido: '' }], true); render(); },
+  'nova-bebida': () => recordDialog('Bebidas', { id: uid(evId + '_b'), evento_id: evId, modalidade: 'Consignado', excluido: '' }, true),
+  'novo-custo': () => recordDialog('Custos', { id: uid(evId + '_x'), evento_id: evId, pago: 'não', excluido: '' }, true),
+  'nova-pessoa': () => recordDialog('Pessoas', { id: uid('p'), excluido: '' }, true),
+  'novo-fornecedor': () => recordDialog('Fornecedores', { id: uid('f'), tipo: 'Vinícola', excluido: '' }, true),
+  'novo-ingrediente': () => recordDialog('Ingredientes', { id: uid('i'), unidade: 'colher', arredondar: 'não', onde_comprar: 'Mercado', excluido: '' }, true),
+  'novo-modelo': () => recordDialog('Modelo_Tarefas', { id: uid('m'), ref: 'D', desloc: '-7', excluido: '' }, true),
   'resumo': async b => { b.disabled = true; try { await api('resumo', { evento: evId }); toast('Resumo enviado para o e-mail'); } catch (e) { toast(e.auth ? 'Senha incorreta' : 'Não consegui falar com o n8n'); } b.disabled = false; },
   'recarregar': () => reload(),
   'sair': () => { localStorage.removeItem(K.senha); showLogin(); },
@@ -865,6 +923,7 @@ document.addEventListener('click', e => {
   let el;
   if ((el = d('#tabs button, [data-nav]'))) { page = el.dataset.page || el.dataset.nav; render(); window.scrollTo({ top: 0 }); return; }
   if ((el = d('[data-done]'))) { const r = byId('Tarefas', el.dataset.done); save('Tarefas', [{ ...r, status: isDone(r) ? 'Em aberto' : 'Feito' }], true); render(); return; }
+  if ((el = d('[data-tog-compra]'))) { const r = byId('Compras', el.dataset.togCompra); save('Compras', [{ ...r, status: r.status === 'Comprar' ? 'Comprado' : 'Comprar' }], true); render(); return; }
   if ((el = d('[data-edit-task]'))) return taskDialog(byId('Tarefas', el.dataset.editTask));
   if ((el = d('[data-del]'))) { const [tab, id] = el.dataset.del.split('|'), r = byId(tab, id);
     if (r && confirm('Remover?')) { save(tab, [{ ...r, excluido: 'sim' }]); render(); } return; }
@@ -873,14 +932,17 @@ document.addEventListener('click', e => {
     save('Reservas', [{ ...r, status: 'Pago', pagamento: today(), valor_pago: r.valor_pago || ev().valor_ingresso || '' }]); render(); return; }
   if ((el = d('[data-pick-rec]'))) { recSel = el.dataset.pickRec; render(); return; }
   if ((el = d('[data-open-rec]'))) { recSel = el.dataset.openRec; page = 'receitas'; render(); window.scrollTo({ top: 0 }); return; }
-  if ((el = d('[data-ing-dlg]'))) return ingDialog(byId('Ingredientes', el.dataset.ingDlg));
   if ((el = d('[data-copiar]'))) { copiarCompras(el.dataset.copiar); return; }
   if ((el = d('[data-periodo]'))) { prefs.periodo = el.dataset.periodo; savePrefs(); render(); return; }
   if ((el = d('[data-pref]'))) { prefs[el.dataset.pref] = el.dataset.val; savePrefs(); render(); return; }
   if ((el = d('[data-act]')) && ACTIONS[el.dataset.act]) return ACTIONS[el.dataset.act](el);
+  if ((el = d('[data-open]'))) return openRecord(el.dataset.open);
   if (d('#sync') && MODE === 'n8n') { queue.length ? flush() : reload(); }
 });
 
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-open][role=button],[data-edit-task]')) { e.preventDefault(); e.target.click(); }
+});
 document.addEventListener('change', e => {
   const x = e.target;
   if (x.dataset.e) {
@@ -923,7 +985,7 @@ document.addEventListener('visibilitychange', () => {
 
 function showLogin(msg) {
   $('#tabs').style.display = 'none';
-  $('#main').innerHTML = `<div class="card login accent"><h2>Painel Gato Véio</h2><p class="muted">Entre com a senha combinada no n8n.</p>
+  $('#main').innerHTML = `<div class="sheet login"><h2>Painel Gato Véio</h2><p class="muted">Entre com a senha combinada no n8n.</p>
     <form id="f-login"><input name="senha" type="password" required autocomplete="current-password" placeholder="Senha"><button class="btn" style="justify-content:center">Entrar</button></form>
     <p id="login-msg" class="mini" style="color:var(--red)">${esc(msg || '')}</p></div>`;
   $('#f-login input').focus();
@@ -936,7 +998,7 @@ async function start() {
     if (e.auth) return showLogin(load(K.senha, '') ? 'Senha incorreta.' : '');
     const teste = API + '/gato-veio';
     $('#sync').className = 'sync err'; $('#sync').textContent = 'sem conexão';
-    $('#main').innerHTML = MODE === 'n8n' ? `<div class="card accent"><h3>Não consegui falar com o n8n</h3>
+    $('#main').innerHTML = MODE === 'n8n' ? `<div class="sheet"><h3>Não consegui falar com o n8n</h3>
       <p class="mini">Erro: ${esc(e.message)} · endereço usado: <b>${esc(teste)}</b></p>
       <ol style="padding-left:18px;line-height:1.7">
         <li>Abra <a href="${esc(teste)}" target="_blank" rel="noopener">este link</a> numa aba nova.
@@ -945,11 +1007,12 @@ async function start() {
         <li>O endereço no config.js precisa começar com <b>https://</b>, terminar em <b>/webhook</b> (sem /gato-veio no final) e não pode ser o <i>webhook-test</i>.</li>
         <li>No n8n, abra <b>Executions</b> do workflow: se aparece uma execução vermelha, clique nela e veja qual nó falhou (geralmente credencial do Google ou ID da planilha).</li>
       </ol>
-      <div class="toolbar"><button class="btn" onclick="location.reload()">Tentar de novo</button><button class="btn ghost" onclick="localStorage.removeItem('${K.senha}');location.reload()">Trocar senha</button></div></div>`
+      <div class="btnrow"><button class="btn" onclick="location.reload()">Tentar de novo</button><button class="btn ghost" onclick="localStorage.removeItem('${K.senha}');location.reload()">Trocar senha</button></div></div>`
       : `<div class="notice bad"><b>Não consegui carregar os dados.</b><br>Abra o painel por um servidor (GitHub Pages ou servidor local), não direto do arquivo.<br><span class="mini">${esc(e.message)}</span></div>`;
     if (MODE !== "n8n") setSync(); return;
   }
   $('#tabs').style.display = '';
+  $('#lists').innerHTML = staticLists();
   evId = pickEvent(); render(); if (queue.length) flush();
 }
 start();
